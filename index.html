@@ -24,27 +24,23 @@
     <script src="./script/core.js"></script>
 
 
-    <form id="uploadForm">
-        <input type="file" id="inputFile" accept="image/*">
-        <button type="button" onclick="uploadFile()">Carica su Drive</button>
-    </form>
+    <header>
+      <h1>InstaDrive</h1>
+    </header>
 
-    <script>
-    function uploadFile() {
-        const file = document.getElementById('inputFile').files[0];
-        const fr = new FileReader();
-        fr.onload = function(e) {
-        const data = {
-            fileName: file.name,
-            mimeType: file.type,
-            fileContent: e.target.result.split(',')[1]
-        };
-        // Sostituisci con l'URL della Web App di Google Apps Script
-        google.script.run.withSuccessHandler(() => alert('Caricato!')).processForm(data);
-        };
-        fr.readAsDataURL(file);
-    }
-    </script>
+    <!-- Form di Upload -->
+    <div class="upload-card">
+      <h3>Nuovo Post</h3>
+      <input type="file" id="fileInput" accept="image/*,video/*" />
+      <textarea id="captionInput" placeholder="Scrivi una descrizione..."></textarea>
+      <button id="uploadBtn" onclick="uploadMedia()">Condividi</button>
+      <div id="uploadStatus" style="font-size: 12px; text-align: center;"></div>
+    </div>
+
+    <!-- Feed della Galleria -->
+    <div class="feed" id="feed">
+      <div class="loading-spinner">Caricamento galleria...</div>
+    </div>
 
 
   </body>
