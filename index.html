@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+   
+    <title>Wedding</title>
+    
+    <!-- Collegamento al Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Icona per iOS (Safari non legge bene il manifest per l'icona home) -->
+    <link rel="apple-touch-icon" href="logo.png">
+
+    <!-- Colore della barra di stato su mobile -->
+    <meta name="theme-color" content="#000000">
+
+    <link rel="stylesheet" href="./css/reset.css">
+    <link rel="stylesheet" href="./css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  </head>
+  <body>
+
+    <script src="./script/core.js"></script>
+
+
+    <form id="uploadForm">
+        <input type="file" id="inputFile" accept="image/*">
+        <button type="button" onclick="uploadFile()">Carica su Drive</button>
+    </form>
+
+    <script>
+    function uploadFile() {
+        const file = document.getElementById('inputFile').files[0];
+        const fr = new FileReader();
+        fr.onload = function(e) {
+        const data = {
+            fileName: file.name,
+            mimeType: file.type,
+            fileContent: e.target.result.split(',')[1]
+        };
+        // Sostituisci con l'URL della Web App di Google Apps Script
+        google.script.run.withSuccessHandler(() => alert('Caricato!')).processForm(data);
+        };
+        fr.readAsDataURL(file);
+    }
+    </script>
+
+
+  </body>
+</html>
