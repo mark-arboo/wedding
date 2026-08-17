@@ -157,8 +157,8 @@
 
 #slideshow  {
 	position: relative;
-	height: min(38dvh, 300px);
-	min-height: 210px;
+	height: 70dvh;
+	min-height: 70dvh;
 	overflow: hidden;
 	background: #ececec;
 }
@@ -171,11 +171,11 @@
 }
 
 #signout {
-	position: absolute;
+	position: fixed;
 	top: 12px;
 	right: 12px;
-	width: 36px;
-	height: 36px;
+	width: 40px;
+	height: 40px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -197,7 +197,7 @@
   gap: 4px;
   width: 100%;
   margin: 0 auto;
-	padding-bottom: 24px;
+  padding-bottom: 24px;
 }
 
 .gallery-item {
