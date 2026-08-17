@@ -10,7 +10,7 @@
     <link rel="manifest" href="manifest.json">
 
     <!-- Icona per iOS (Safari non legge bene il manifest per l'icona home) -->
-    <link rel="apple-touch-icon" href="logo.png">
+    <link rel="apple-touch-icon" href="img/logo.png">
 
     <!-- Colore della barra di stato su mobile -->
     <meta name="theme-color" content="#000000">
@@ -21,14 +21,36 @@
   </head>
   <body>
 
+    <script src="./script/gdrive.js"></script>
     <script src="./script/core.js"></script>
 
 
-    <header>
-      <h1>InstaDrive</h1>
-    </header>
+    <div id="login-screen" class="app-screen">
+      <div class="login-hero">
+        <div class="login-overlay">
+          <h1 class="login-title">Matrimonio </h1>
+          <p class="login-subtitle">Daniela &amp; Marco</p>
 
-    <!-- Form di Upload -->
+          <div class="login-form">
+            <label for="login-name" class="login-label">Inserisci il tuo nome per iniziare</label>
+            <input id="login-name" class="login-input" type="text" placeholder="Il tuo nome" autocomplete="name" maxlength="40">
+            <button id="login-submit" class="login-button" type="button">Avanti</button>
+          </div>
+        </div>
+      </div>
+    </div> 
+
+    <div id="grid-screen" class="app-screen">
+      grid screen
+    </div> 
+
+
+    <div id="feed-screen" class="app-screen">
+      feed screen
+    </div> 
+
+
+<!-- Form di Upload 
     <div class="upload-card">
       <h3>Nuovo Post</h3>
       <input type="file" id="fileInput" accept="image/*,video/*" />
@@ -37,11 +59,11 @@
       <div id="uploadStatus" style="font-size: 12px; text-align: center;"></div>
     </div>
 
-    <!-- Feed della Galleria -->
+    
     <div class="feed" id="feed">
       <div class="loading-spinner">Caricamento galleria...</div>
     </div>
-
+-->
 
   </body>
 </html>
