@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="img/logo.png">
 
     <!-- Colore della barra di stato su mobile -->
-    <meta name="theme-color" content="#000000">
+    <meta name="theme-color" content="#ffffff">
 
     <link rel="stylesheet" href="./css/reset.css">
     <link rel="stylesheet" href="./css/style.css">
@@ -32,7 +32,7 @@
           <p class="login-subtitle">Daniela &amp; Marco</p>
 
           <div class="login-form">
-            <label for="login-name" class="login-label">Inserisci il tuo nome per iniziare</label>
+            <label for="login-name" class="login-label">Condividi le tue foto e video con noi in questo giorno speciale! </label>
             <input id="login-name" class="login-input" type="text" placeholder="Il tuo nome" autocomplete="name" maxlength="40">
             <button id="login-submit" class="login-button" type="button">Avanti <i class="fa fa-arrow-right" aria-hidden="true"></i></button>
           </div>
@@ -41,13 +41,74 @@
     </div> 
 
     <div id="grid-screen" class="app-screen">
-      grid screen
+      <div class="grid-layout">
+        
+        <div id="slideshow" aria-label="Slideshow foto casuali">
+          <img id="slideshow-image" src="img/no-image.jpg" alt="Slideshow matrimonio" loading="eager" />
+          <div id="signout" onclick="showLoginPanel()">
+            <i class="fa fa-sign-out" aria-hidden="true"></i>
+          </div>
+        </div>
+
+        <div class="instagram-grid">
+          <div class="gallery-item">
+            <img src="img/no-image.jpg" alt="image" loading="lazy" />
+            <div class="overlay">
+              <div class="stats">
+                <!-- Icona Cuore + Numero Likes -->
+                <span class="likes">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                  128
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="gallery-item">
+            <img src="img/no-image.jpg" alt="image" loading="lazy" />
+            <div class="overlay">
+              <div class="stats">
+                <!-- Icona Cuore + Numero Likes -->
+                <span class="likes">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                  128
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="gallery-item">
+            <img src="img/no-image.jpg" alt="image" loading="lazy" />
+            <div class="overlay">
+              <div class="stats">
+                <!-- Icona Cuore + Numero Likes -->
+                <span class="likes">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                  128
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="gallery-item">
+            <img src="img/no-image.jpg" alt="image" loading="lazy" />
+            <div class="overlay">
+              <div class="stats">
+                <!-- Icona Cuore + Numero Likes -->
+                <span class="likes">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                  128
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div> 
 
 
     <div id="feed-screen" class="app-screen">
-      feed screen
+
     </div> 
+
 
 
 <!-- Form di Upload 

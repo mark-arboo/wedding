@@ -3,7 +3,6 @@
 
 
 document.addEventListener('DOMContentLoaded', function() {
-    setupLoginScreen();
 /*
     document.getElementById('enter-button').addEventListener('click', function() {
         showMenuPanel();
@@ -21,48 +20,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
 });
 
-function setupLoginScreen() {
-    const nameInput = document.getElementById('login-name');
-    const submitButton = document.getElementById('login-submit');
-
-    if (!nameInput || !submitButton) {
-        return;
-    }
-
-    const savedUserName = localStorage.getItem('userName');
-    if (savedUserName) {
-        nameInput.value = savedUserName;
-    }
-
-    const proceedToGrid = function() {
-        const userName = nameInput.value.trim();
-
-        if (!userName) {
-            nameInput.classList.add('is-error');
-            nameInput.focus();
-            return;
-        }
-
-        nameInput.classList.remove('is-error');
-        localStorage.setItem('userName', userName);
-        showGridPanel();
-    };
-
-    submitButton.addEventListener('click', proceedToGrid);
-
-    nameInput.addEventListener('keydown', function(event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            proceedToGrid();
-        }
-    });
-
-    nameInput.addEventListener('input', function() {
-        if (nameInput.value.trim()) {
-            nameInput.classList.remove('is-error');
-        }
-    });
-}
 
 /**
  * Controlla se è la prima volta che l'applicazione viene caricata
@@ -132,6 +89,7 @@ function onFirstLoad() {
 function onPageRefresh() {
     // Qui puoi aggiungere logica per il refresh
     // Ad esempio: ripristinare stato, saltare intro, etc.
+    hideAllPanels();
     
     // Controlla se c'era un pannello salvato
     const lastPanel = sessionStorage.getItem('lastActivePanel');
@@ -154,26 +112,96 @@ function onPageRefresh() {
 }
 
 
-function showGridPanel() {
-    // Logica per mostrare il pannello del menu
-    hideAllPanels();
-    
-    //loadFeed();
 
-    sessionStorage.setItem('lastActivePanel', 'grid');
-    document.getElementById('grid-screen').style.display = 'block';
-}
 
 function showLoginPanel() {
-     // Logica per mostrare il pannello del menu
+
+    console.log("Entrato in showLoginPanel()");
+
+    // Logica per mostrare il pannello del menu
     hideAllPanels();
 
     sessionStorage.setItem('lastActivePanel', 'login');
     document.getElementById('login-screen').style.display = 'block';
+
+    const nameInput = document.getElementById('login-name');
+    const submitButton = document.getElementById('login-submit');
+
+    if (!nameInput || !submitButton) {
+        return;
+    }
+
+    const savedUserName = localStorage.getItem('userName');
+    if (savedUserName) {
+        nameInput.value = savedUserName;
+    }
+
+    const proceedToGrid = function() {
+        const userName = nameInput.value.trim();
+
+        if (!userName) {
+            nameInput.classList.add('is-error');
+            nameInput.focus();
+            return;
+        }
+
+        nameInput.classList.remove('is-error');
+        localStorage.setItem('userName', userName);
+        showGridPanel();
+    };
+
+    submitButton.addEventListener('click', proceedToGrid);
+
+    nameInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            proceedToGrid();
+        }
+    });
+
+    nameInput.addEventListener('input', function() {
+        if (nameInput.value.trim()) {
+            nameInput.classList.remove('is-error');
+        }
+    });
+
 }
+
+function showGridPanel() {
+    // Logica per mostrare il pannello del menu
+    console.log("Entrato in showGridPanel()");
+    
+    hideAllPanels();
+    document.getElementById('grid-screen').style.display = 'block';
+    
+/*
+    const data = loadFeed();
+    result.data.forEach(item => {
+        // Determina se è un'immagine o un video
+        let mediaHtml = "";
+        if (item.mimeType.startsWith("video/")) {
+          mediaHtml = `<video src="${item.src}" controls playsinline></video>`;
+        } else {
+          mediaHtml = `<img src="${item.src}" alt="Post Media" loading="lazy" />`;
+        }
+
+        const formattedDate = new Date(item.created).toLocaleDateString("it-IT", {
+          day: 'numeric', month: 'short', year: 'numeric'
+        });
+
+
+    });
+*/
+
+    sessionStorage.setItem('lastActivePanel', 'grid');
+
+}
+
 
 function showFeedPanel() {
     // Logica per mostrare il pannello del menu
+    console.log("Entrato in showFeedPanel()");
+
     hideAllPanels();
 
     sessionStorage.setItem('lastActivePanel', 'feed');

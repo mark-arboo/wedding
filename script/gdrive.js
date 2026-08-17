@@ -17,6 +17,9 @@ async function loadFeed() {
         return;
       }
 
+      return result.data;
+
+      /*
       result.data.forEach(item => {
         const postElement = document.createElement("div");
         postElement.className = "post";
@@ -42,6 +45,8 @@ async function loadFeed() {
 
         feedContainer.appendChild(postElement);
       });
+      */
+
     } else {
       feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Errore nel caricamento del feed.</p>";
     }
