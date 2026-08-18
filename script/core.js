@@ -20,6 +20,22 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
 });
 
+const GRID_PAGE_SIZE = 6;
+const gridFeedState = {
+    sortedData: [],
+    renderedCount: 0,
+    observer: null,
+    sentinel: null,
+    isAppending: false
+};
+
+const slideshowState = {
+    timerId: null,
+    imageUrls: [],
+    currentIndex: 0
+};
+
+
 
 /**
  * Controlla se è la prima volta che l'applicazione viene caricata
@@ -167,34 +183,200 @@ function showLoginPanel() {
 
 }
 
-function showGridPanel() {
+async function showGridPanel() {
     // Logica per mostrare il pannello del menu
     console.log("Entrato in showGridPanel()");
     
+    resetGridPaginationState();
     hideAllPanels();
     document.getElementById('grid-screen').style.display = 'block';
-    
-/*
-    const data = loadFeed();
-    result.data.forEach(item => {
-        // Determina se è un'immagine o un video
-        let mediaHtml = "";
-        if (item.mimeType.startsWith("video/")) {
-          mediaHtml = `<video src="${item.src}" controls playsinline></video>`;
-        } else {
-          mediaHtml = `<img src="${item.src}" alt="Post Media" loading="lazy" />`;
+
+    const feedContainer = document.getElementById('feed');
+    if (feedContainer) {
+        feedContainer.innerHTML = "<div class='grid-loading'><span class='loading-spinner' aria-label='Caricamento in corso'></span></div>";
+    }
+
+    try {
+        const data = await loadFeed(feedContainer);
+
+        // loadFeed gestisce già i messaggi di errore/vuoto sul container.
+        if (!Array.isArray(data) || !feedContainer) {
+            sessionStorage.setItem('lastActivePanel', 'grid');
+            return;
         }
 
-        const formattedDate = new Date(item.created).toLocaleDateString("it-IT", {
-          day: 'numeric', month: 'short', year: 'numeric'
+        const sortedData = data.slice().sort(function(a, b) {
+            return new Date(b.created).getTime() - new Date(a.created).getTime();
         });
 
+        initializeSlideshow(sortedData);
 
-    });
-*/
+        gridFeedState.sortedData = sortedData;
+        feedContainer.innerHTML = '';
+
+        appendNextGridPage(feedContainer);
+        setupGridInfiniteScroll(feedContainer);
+    } catch (error) {
+        console.error('Errore in showGridPanel:', error);
+        resetSlideshow();
+        if (feedContainer) {
+            feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Errore nel caricamento della galleria.</p>";
+        }
+    }
 
     sessionStorage.setItem('lastActivePanel', 'grid');
 
+}
+
+
+function resetGridPaginationState() {
+    if (gridFeedState.observer) {
+        gridFeedState.observer.disconnect();
+    }
+
+    if (gridFeedState.sentinel && gridFeedState.sentinel.parentNode) {
+        gridFeedState.sentinel.parentNode.removeChild(gridFeedState.sentinel);
+    }
+
+    gridFeedState.sortedData = [];
+    gridFeedState.renderedCount = 0;
+    gridFeedState.observer = null;
+    gridFeedState.sentinel = null;
+    gridFeedState.isAppending = false;
+}
+
+function resetSlideshow() {
+    if (slideshowState.timerId) {
+        window.clearInterval(slideshowState.timerId);
+    }
+
+    slideshowState.timerId = null;
+    slideshowState.imageUrls = [];
+    slideshowState.currentIndex = 0;
+}
+
+function transitionSlideshowImage(nextImageUrl) {
+    const slideshowImage = document.getElementById('slideshow-image');
+    if (!slideshowImage) {
+        return;
+    }
+
+    slideshowImage.classList.add('is-fading');
+
+    window.setTimeout(function() {
+        slideshowImage.src = nextImageUrl;
+        window.requestAnimationFrame(function() {
+            slideshowImage.classList.remove('is-fading');
+        });
+    }, 220);
+}
+
+function initializeSlideshow(sortedData) {
+    resetSlideshow();
+
+    const slideshowImage = document.getElementById('slideshow-image');
+    if (!slideshowImage || !Array.isArray(sortedData)) {
+        return;
+    }
+
+    const imageUrls = sortedData
+        .filter(function(item) {
+            return item && item.src && item.mimeType && item.mimeType.startsWith('image/');
+        })
+        .slice(0, 6) // Prendi solo le prime 6 immagini
+        .map(function(item) {
+            return item.src;
+        });
+
+    if (imageUrls.length === 0) {
+        slideshowImage.src = 'img/no-image.jpg';
+        return;
+    }
+
+    slideshowState.imageUrls = imageUrls;
+    slideshowState.currentIndex = 0;
+    slideshowImage.src = imageUrls[0];
+
+    if (imageUrls.length === 1) {
+        return;
+    }
+
+    slideshowState.timerId = window.setInterval(function() {
+        slideshowState.currentIndex = (slideshowState.currentIndex + 1) % slideshowState.imageUrls.length;
+        transitionSlideshowImage(slideshowState.imageUrls[slideshowState.currentIndex]);
+    }, 5000);
+}
+
+function createGalleryItemMarkup(item) {
+    if (item.mimeType && item.mimeType.startsWith('video/')) {
+        return `<div class="gallery-item"><video src="${item.src}" controls playsinline preload="metadata"></video></div>`;
+    }
+
+    return `<div class="gallery-item"><img src="${item.src}" alt="Foto matrimonio" loading="lazy" /></div>`;
+}
+
+function appendNextGridPage(feedContainer) {
+    if (!feedContainer || gridFeedState.isAppending) {
+        return;
+    }
+
+    const totalItems = gridFeedState.sortedData.length;
+    if (gridFeedState.renderedCount >= totalItems) {
+        if (gridFeedState.observer) {
+            gridFeedState.observer.disconnect();
+        }
+        return;
+    }
+
+    gridFeedState.isAppending = true;
+
+    const start = gridFeedState.renderedCount;
+    const end = Math.min(start + GRID_PAGE_SIZE, totalItems);
+
+    if (start > 0) {
+        console.log(`Caricamento paginato attivato: elementi ${start + 1}-${end} di ${totalItems}`);
+    }
+
+    const chunkHtml = gridFeedState.sortedData.slice(start, end).map(createGalleryItemMarkup).join('');
+    feedContainer.insertAdjacentHTML('beforeend', chunkHtml);
+    gridFeedState.renderedCount = end;
+
+    if (gridFeedState.renderedCount >= totalItems && gridFeedState.observer) {
+        gridFeedState.observer.disconnect();
+    }
+
+    gridFeedState.isAppending = false;
+}
+
+function setupGridInfiniteScroll(feedContainer) {
+    const totalItems = gridFeedState.sortedData.length;
+    if (!feedContainer || totalItems <= GRID_PAGE_SIZE) {
+        return;
+    }
+
+    const sentinelParent = feedContainer.parentElement || feedContainer;
+    const sentinel = document.createElement('div');
+    sentinel.id = 'feed-sentinel';
+    sentinel.setAttribute('aria-hidden', 'true');
+    sentinel.style.width = '100%';
+    sentinel.style.height = '1px';
+    sentinel.style.margin = '0';
+    sentinel.style.opacity = '0';
+    sentinel.style.pointerEvents = 'none';
+    sentinelParent.appendChild(sentinel);
+
+    gridFeedState.sentinel = sentinel;
+    gridFeedState.observer = new IntersectionObserver(function(entries) {
+        if (entries[0] && entries[0].isIntersecting) {
+            appendNextGridPage(feedContainer);
+        }
+    }, {
+        root: null,
+        rootMargin: '200px 0px',
+        threshold: 0.01
+    });
+
+    gridFeedState.observer.observe(sentinel);
 }
 
 
@@ -209,6 +391,8 @@ function showFeedPanel() {
 }
 
 function hideAllPanels() {
+    resetGridPaginationState();
+    resetSlideshow();
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('grid-screen').style.display = 'none';
     document.getElementById('feed-screen').style.display = 'none';

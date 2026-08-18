@@ -3,8 +3,8 @@ const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvpSF6iXQ41oYE
 
 
 // 1. Funzione per caricare le immagini/video da Google Drive
-async function loadFeed() {
-  const feedContainer = document.getElementById("feed");
+async function loadFeed(feedContainer) {
+  // const feedContainer = document.getElementById(root);
   try {
     const response = await fetch(APPS_SCRIPT_URL);
     const result = await response.json();
@@ -13,8 +13,8 @@ async function loadFeed() {
       feedContainer.innerHTML = ""; // Pulisci il caricamento
 
       if (result.data.length === 0) {
-        feedContainer.innerHTML = "<p style='text-align:center;'>Nessun elemento presente nella galleria.</p>";
-        return;
+          feedContainer.innerHTML = "<p style='text-align:center;'>Nessun elemento presente nella galleria.</p>";
+          return;
       }
 
       return result.data;
@@ -48,7 +48,7 @@ async function loadFeed() {
       */
 
     } else {
-      feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Errore nel caricamento del feed.</p>";
+      feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Errore nel caricamento della galleria.</p>";
     }
   } catch (err) {
     console.error(err);
