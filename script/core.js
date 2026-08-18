@@ -1,25 +1,24 @@
 
-
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/script/sw.js')
+      .then(registration => {
+        console.log('Service Worker registrato con successo:', registration.scope);
+      })
+      .catch(error => {
+        console.error('Errore durante la registrazione del Service Worker:', error);
+      });
+  });
+}
 
 
 document.addEventListener('DOMContentLoaded', function() {
-/*
-    document.getElementById('enter-button').addEventListener('click', function() {
-        showMenuPanel();
-    });
-
-    document.getElementById('contact-button').addEventListener('click', function() {
-        showContactsPanel();
-    });
-
-    document.getElementById('language-button').addEventListener('click', function() {
-        showLanguagePanel();
-    });
-*/
     // Inizializza l'app controllando se è primo caricamento o refresh
     initializeApp();
 });
 
+const SLIDESHOW_INTERVAL = 5000; // Intervallo di 5 secondi per lo slideshow
+const SLIDESHOW_NUM_IMAGES = 6; // Numero massimo di immagini da mostrare nello slideshow
 const GRID_PAGE_SIZE = 6;
 const gridFeedState = {
     sortedData: [],
@@ -283,7 +282,7 @@ function initializeSlideshow(sortedData) {
         .filter(function(item) {
             return item && item.src && item.mimeType && item.mimeType.startsWith('image/');
         })
-        .slice(0, 6) // Prendi solo le prime 6 immagini
+        .slice(0, SLIDESHOW_NUM_IMAGES) // Prendi solo le prime 6 immagini
         .map(function(item) {
             return item.src;
         });
@@ -304,7 +303,7 @@ function initializeSlideshow(sortedData) {
     slideshowState.timerId = window.setInterval(function() {
         slideshowState.currentIndex = (slideshowState.currentIndex + 1) % slideshowState.imageUrls.length;
         transitionSlideshowImage(slideshowState.imageUrls[slideshowState.currentIndex]);
-    }, 5000);
+    }, SLIDESHOW_INTERVAL);
 }
 
 function createGalleryItemMarkup(item) {

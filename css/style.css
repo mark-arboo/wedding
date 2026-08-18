@@ -165,6 +165,7 @@
 
 .grid-layout {
 	min-height: 100dvh;
+	background: #000;
 }
 
 #slideshow  {
@@ -199,6 +200,20 @@
 	opacity: 0.2;
 }
 
+#slideshow .slideshow-heading {
+	top: 70%;
+	left: 24px;
+	transform: translateY(-50%);
+	width: min(600px, calc(100% - 48px));
+	z-index: 10;
+}
+
+#slideshow .slideshow-heading .login-title,
+#slideshow .slideshow-heading .login-subtitle {
+	color: #ffffff;
+	text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
 #slideshow-uploadBtn {
 	position: absolute;
 	top: 53dvh;
@@ -228,8 +243,8 @@
 	align-items: center;
 	justify-content: center;
 	border-radius: 50%;
-	border: 1px solid #373737;
-	background: #373737;
+	border: 1px solid #fd0890;
+	background: #fd0890;
 	color: #ffffff;
 	text-align: center;
 	cursor: pointer;
