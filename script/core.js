@@ -1,7 +1,7 @@
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+        navigator.serviceWorker.register('./sw.js')
       .then(registration => {
         console.log('Service Worker registrato con successo:', registration.scope);
       })
@@ -183,9 +183,9 @@ function showLoginPanel() {
 async function showGridPanel() {
     // Logica per mostrare il pannello del menu
     console.log("Entrato in showGridPanel()");
-    
-    resetGridPaginationState();
+   
     hideAllPanels();
+    document.getElementById('slideshow-image').src = "";
     document.getElementById('grid-screen').style.display = 'block';
 
     const feedContainer = document.getElementById('feed');
