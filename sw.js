@@ -25,15 +25,18 @@ self.addEventListener('activate', (event) => {
 // 3. Evento Fetch: intercetta le richieste HTTP
 self.addEventListener('fetch', (event) => {
   const request = event.request;
+  const url = new URL(request.url);
+  const isGoogleImage = url.origin === 'https://lh3.googleusercontent.com' && url.pathname.startsWith('/d/');
 
   // Intercettiamo solo le richieste per le immagini
-  if (request.destination === 'image' || request.url.startsWith('https://lh3.googleusercontent.com/')) {
+  if (request.destination === 'image' || isGoogleImage) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         // Cerca l'immagine in cache
-        const cachedResponse = await cache.match(request);
+        const cachedResponse = await cache.match(request.url);
         if (cachedResponse) {
           // Trovata in cache! La restituiamo subito
+          console.log('Immagine servita dalla cache:', request.url);
           return cachedResponse;
         }
 
@@ -42,9 +45,10 @@ self.addEventListener('fetch', (event) => {
           const networkResponse = await fetch(request);
 
           // Verifichiamo che la risposta sia valida prima di salvarla
-          if (networkResponse && networkResponse.status === 200) {
+          if (networkResponse && (networkResponse.ok || networkResponse.type === 'opaque')) {
             // Nota: cloniamo la risposta perché il body di una Response può essere letto una sola volta
-            cache.put(request, networkResponse.clone());
+            await cache.put(request.url, networkResponse.clone());
+            console.log('Immagine salvata in cache:', request.url);
           }
 
           return networkResponse;

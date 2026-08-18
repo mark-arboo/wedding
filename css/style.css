@@ -216,7 +216,7 @@
 
 #slideshow-uploadBtn {
 	position: absolute;
-	top: 53dvh;
+	top: 50dvh;
 	left: 50%;
 	transform: translateX(-50%);
 	padding: 15px;
