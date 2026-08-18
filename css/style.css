@@ -52,25 +52,25 @@
 
 .login-heading {
 	position: absolute;
-	top: 50dvh;
+	top: 40dvh;
 	left: 50%;
 	transform: translate(-50%, -50%);
 	width: min(600px, calc(100% - 48px));
-	text-align: center;
+	text-align: left;
 }
 
 .login-title {
 	font-family: 'Montserrat Local', 'Segoe UI', Arial, sans-serif;
 	font-weight: 600;
-	font-size: clamp(1.1rem, 4.6vw, 1.7rem);
+	font-size: clamp(1rem, 4.2vw, 1.55rem);
 	line-height: 1.03;
 	letter-spacing: 1.2px;
 	text-transform: uppercase;
-	text-align: center;
+	text-align: left;
 }
 
 .login-title + .login-subtitle {
-	margin-top: -8px;
+	margin-top: 8px;
 }
 
 .login-subtitle {
@@ -80,12 +80,12 @@
 	letter-spacing: 0.2px;
 	opacity: 0.95;
 	margin-bottom: 12px;
-	text-align: center;
+	text-align: left;
 }
 
 .login-form {
 	position: absolute;
-	top: 75dvh;
+	top: 65dvh;
 	left: 50%;
 	transform: translate(-50%, -50%);
 	width: min(600px, calc(100% - 48px));
@@ -169,8 +169,8 @@
 
 #slideshow  {
 	position: relative;
-	height: 70dvh;
-	min-height: 70dvh;
+	height: 60dvh;
+	min-height: 60dvh;
 	overflow: hidden;
 	background: #ececec;
 }
@@ -182,12 +182,31 @@
 	display: block;
 }
 
+#slideshow-uploadBtn {
+	position: absolute;
+	top: 53dvh;
+	left: 50%;
+	transform: translateX(-50%);
+	padding: 15px;
+	border: 0;
+	border-radius: 12px;
+	font-size: 1rem;
+	font-weight: 700;
+	background: var(--primary);
+	color: #ffffff;
+	text-align: center;
+	cursor: pointer;
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+	z-index: 20;
+}
+
 #signout {
 	position: fixed;
 	top: 12px;
 	right: 12px;
-	width: 40px;
-	height: 40px;
+	width: 45px;
+	height: 45px;
+	font-size: 22px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
