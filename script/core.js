@@ -26,6 +26,14 @@ const PULL_THRESHOLD = 80; // Pixel di trascinamento necessari per attivare l'az
 let ptrIndicator;
 let ptrText;
 
+function getPullDistance() {
+    return Math.max(0, currentY - startY);
+}
+
+function getPulledDistance() {
+    return getPullDistance() / 2.5;
+}
+
 
 // 1. Quando l'utente tocca lo schermo
 window.addEventListener('touchstart', (e) => {
@@ -33,12 +41,15 @@ window.addEventListener('touchstart', (e) => {
   const lastPanel = sessionStorage.getItem('lastActivePanel');
   if (lastPanel !== 'grid') return; // Attiva la logica solo se il pannello attivo è la Grid
 
-  // Attiva la logica solo se la pagina si trova in cima
-  if (document.getElementById('grid-screen').scrollTop === 0) {
+    const gridScreen = document.getElementById('grid-screen');
+    if (!gridScreen) return;
+
+    // Attiva la logica solo se la pagina si trova in cima
+    if (gridScreen.scrollTop === 0) {
     startY = e.touches[0].pageY;
     isPulling = true;
 
-    console.log("Touch start: ", startY, "scrollTop: ", document.getElementById('grid-screen').scrollTop);
+    console.log("Touch start: ", startY, "scrollTop: ", gridScreen.scrollTop);
   }
 
 }, { passive: true });
@@ -51,21 +62,24 @@ window.addEventListener('touchmove', (e) => {
   if (!isPulling) return;
 
   currentY = e.touches[0].pageY;
-  const distance = currentY - startY;
+    const pulledDistance = getPulledDistance();
 
   // Stiamo trascinando verso il basso
-  if (distance > 0) {
+    if (pulledDistance > 0) {
     // Applichiamo una resistenza fisica (diviso 2.5) per rendere il movimento fluido
-    const pulledDistance = Math.min(distance / 2.5, PULL_THRESHOLD + 20);
-    ptrIndicator.style.height = `${pulledDistance}px`;
+        const visibleDistance = Math.min(pulledDistance, PULL_THRESHOLD + 20);
+        ptrIndicator.style.height = `${visibleDistance}px`;
 
-    if (pulledDistance >= PULL_THRESHOLD) {
+        if (visibleDistance >= PULL_THRESHOLD) {
       ptrText.textContent = 'Rilascia per aggiornare';
     } else {
       ptrText.textContent = 'Scorri per aggiornare';
     }
 
     console.log("Touch move: ", startY, "Current Y: ", currentY);
+    } else {
+        ptrIndicator.style.height = '0px';
+        ptrText.textContent = 'Scorri per aggiornare';
   }
 }, { passive: true });
 
@@ -78,8 +92,7 @@ window.addEventListener('touchend', async () => {
 
   isPulling = false;
 
-  const distance = currentY - startY;
-  const pulledDistance = distance / 2.5;
+    const pulledDistance = getPulledDistance();
 
   if (pulledDistance >= PULL_THRESHOLD) {
     //ptrText.textContent = 'Aggiornamento in corso...';
@@ -424,7 +437,6 @@ async function showGridPanel() {
           return;
         }
 
-        // loadFeed gestisce già i messaggi di errore/vuoto sul container.
         if (!Array.isArray(data) || !feedContainer) {
             sessionStorage.setItem('lastActivePanel', 'grid');
             return;
