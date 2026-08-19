@@ -84,6 +84,10 @@ function readAppStatesFromSession() {
             return null;
         }
 
+        if (parsedGridState.sortedData.length === 0 && parsedSlideshowState.imageUrls.length === 0) {
+            return null;
+        }
+
         return {
             grid: {
                 sortedData: parsedGridState.sortedData,
