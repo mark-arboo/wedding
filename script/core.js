@@ -306,11 +306,13 @@ async function showGridPanel() {
     if (tryRestoreGridPanelFromSession(feedContainer)) {
         sessionStorage.setItem('lastActivePanel', 'grid');
         console.log("Grid panel restored from sessionStorage.");
+        alert("Grid panel restored from sessionStorage.");
         return;
     }
 
     // Logica per mostrare il pannello del menu
     console.log("Entrato in showGridPanel()");
+    alert("Entrato in showGridPanel()");
 
     if (feedContainer) {
         feedContainer.innerHTML = "<div class='grid-loading'><span class='loading-spinner' aria-label='Caricamento in corso'></span></div>";
