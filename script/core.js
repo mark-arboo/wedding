@@ -389,7 +389,6 @@ function showLoginPanel() {
 async function showGridPanel() {
 
     hideAllPanels();
-    document.getElementById('slideshow-image').src = "";
     document.getElementById('grid-screen').style.display = 'block';
 
     ptrIndicator = document.getElementById('ptr-indicator');
@@ -406,6 +405,8 @@ async function showGridPanel() {
     // Logica per mostrare il pannello del menu
     console.log("Entrato in showGridPanel()");
 
+    document.getElementById('slideshow-image').style.display = "none"; // Nasconde l'immagine dello slideshow durante l'aggiornamento
+    
     if (feedContainer) {
         feedContainer.innerHTML = "<div class='grid-loading'><span class='loading-spinner' aria-label='Caricamento in corso'></span></div>";
     }
@@ -429,8 +430,7 @@ async function showGridPanel() {
         });
 
         initializeSlideshow(sortedData);
-
-      
+        document.getElementById('slideshow-image').style.display = "block"; // Nasconde l'immagine dello slideshow durante l'aggiornamento
 
         gridFeedState.sortedData = sortedData;
         feedContainer.innerHTML = '';
