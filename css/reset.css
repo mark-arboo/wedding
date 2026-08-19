@@ -4,6 +4,10 @@ body {
 	min-height: 100%;
 	overflow: hidden;
 	background: #000;
+	/* Impedisce il rimbalzo nativo su mobile per non sovrapporsi all'effetto custom */
+    overscroll-behavior-y: contain;
+	margin: 0;
+	padding: 0;
 }
 
 body {

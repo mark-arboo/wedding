@@ -1,21 +1,3 @@
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-      .then(registration => {
-        console.log('Service Worker registrato con successo:', registration.scope);
-      })
-      .catch(error => {
-        console.error('Errore durante la registrazione del Service Worker:', error);
-      });
-  });
-}
-
-
-document.addEventListener('DOMContentLoaded', function() {
-    // Inizializza l'app controllando se è primo caricamento o refresh
-    initializeApp();
-});
-
 const SLIDESHOW_INTERVAL = 5000; // Intervallo di 5 secondi per lo slideshow
 const SLIDESHOW_NUM_IMAGES = 6; // Numero massimo di immagini da mostrare nello slideshow
 const GRID_PAGE_SIZE = 6;
@@ -35,6 +17,120 @@ const slideshowState = {
 
 const GRID_FEED_STATE_KEY = 'gridFeedState';
 const SLIDESHOW_STATE_KEY = 'slideshowState';
+
+let startY = 0;
+let currentY = 0;
+let isPulling = false;
+const PULL_THRESHOLD = 80; // Pixel di trascinamento necessari per attivare l'azione
+
+let ptrIndicator;
+let ptrText;
+
+
+// 1. Quando l'utente tocca lo schermo
+window.addEventListener('touchstart', (e) => {
+
+   const lastPanel = sessionStorage.getItem('lastActivePanel');
+   if (lastPanel !== 'grid') return; // Attiva la logica solo se il pannello attivo è la Grid
+
+   console.log("Touch start detected. Current scroll position:", window.scrollY);
+
+  // Attiva la logica solo se la pagina si trova in cima
+  if (window.scrollY === 0) {
+    startY = e.touches[0].pageY;
+    isPulling = true;
+  }
+}, { passive: true });
+
+// 2. Mentre l'utente trascina il dito verso il basso
+window.addEventListener('touchmove', (e) => {
+  const lastPanel = sessionStorage.getItem('lastActivePanel');
+  if (lastPanel !== 'grid') return; // Attiva la logica solo se il pannello attivo è la Grid
+
+  if (!isPulling) return;
+
+  console.log("Touch move detected. Current scroll position:", window.scrollY);
+
+  currentY = e.touches[0].pageY;
+  const distance = currentY - startY;
+
+  // Stiamo trascinando verso il basso
+  if (distance > 0) {
+    // Applichiamo una resistenza fisica (diviso 2.5) per rendere il movimento fluido
+    const pulledDistance = Math.min(distance / 2.5, PULL_THRESHOLD + 20);
+    ptrIndicator.style.height = `${pulledDistance}px`;
+
+    if (pulledDistance >= PULL_THRESHOLD) {
+      ptrText.textContent = 'Rilascia per aggiornare';
+    } else {
+      ptrText.textContent = 'Scorri per aggiornare';
+    }
+  }
+}, { passive: true });
+
+// 3. Quando l'utente stacca il dito dallo schermo
+window.addEventListener('touchend', async () => {
+  const lastPanel = sessionStorage.getItem('lastActivePanel');
+  if (lastPanel !== 'grid') return; // Attiva la logica solo se il pannello attivo è la Grid
+
+  if (!isPulling) return;
+
+  console.log("Touch end detected. Current scroll position:", window.scrollY);
+
+  isPulling = false;
+
+  const distance = currentY - startY;
+  const pulledDistance = distance / 2.5;
+
+  if (pulledDistance >= PULL_THRESHOLD) {
+    ptrText.textContent = 'Aggiornamento in corso...';
+    ptrIndicator.style.height = '50px'; // Mantiene visibile lo spinner/testo
+
+    // --- Inserisci qui la tua funzione di aggiornamento ---
+    await refreshGalleryData(); 
+
+    // Ripristina l'interfaccia a caricamento completato
+    ptrIndicator.style.height = '0px';
+    ptrText.textContent = 'Scorri per aggiornare';
+  } else {
+    // Se non si è tirato abbastanza, annulla il movimento
+    ptrIndicator.style.height = '0px';
+  }
+
+  startY = 0;
+  currentY = 0;
+});
+
+
+function refreshGalleryData() {
+
+    // Reset dello stato della Grid e dello Slideshow
+    resetGridPaginationState();
+    resetSlideshow();
+
+    showGridPanel();
+}
+
+
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+      .then(registration => {
+        console.log('Service Worker registrato con successo:', registration.scope);
+      })
+      .catch(error => {
+        console.error('Errore durante la registrazione del Service Worker:', error);
+      });
+  });
+}
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Inizializza l'app controllando se è primo caricamento o refresh
+    initializeApp();
+});
+
 
 function getSerializableGridFeedState() {
     return {
@@ -301,18 +397,19 @@ async function showGridPanel() {
     document.getElementById('slideshow-image').src = "";
     document.getElementById('grid-screen').style.display = 'block';
 
+    ptrIndicator = document.getElementById('ptr-indicator');
+    ptrText = document.getElementById('ptr-text');
+
     const feedContainer = document.getElementById('feed');
 
     if (tryRestoreGridPanelFromSession(feedContainer)) {
         sessionStorage.setItem('lastActivePanel', 'grid');
         console.log("Grid panel restored from sessionStorage.");
-        alert("Grid panel restored from sessionStorage.");
         return;
     }
 
     // Logica per mostrare il pannello del menu
     console.log("Entrato in showGridPanel()");
-    alert("Entrato in showGridPanel()");
 
     if (feedContainer) {
         feedContainer.innerHTML = "<div class='grid-loading'><span class='loading-spinner' aria-label='Caricamento in corso'></span></div>";
@@ -348,12 +445,12 @@ async function showGridPanel() {
         saveAppStatesToSession();
         
     } catch (error) {
-        console.error('Errore in showGridPanel:', error);
+        console.error('Errore in showGridPanel: ', error.message);
         resetSlideshow();
         resetGridPaginationState();
         
         if (feedContainer) {
-            feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Errore nel caricamento della galleria.</p>";
+            feedContainer.innerHTML = "<p style='text-align:center; color:red;'>" + error.message + "</p>";
         }
     }
 
