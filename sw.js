@@ -1,5 +1,39 @@
 const CACHE_NAME = 'wedding-images-v1';
 
+// Logging centralizzato del Service Worker.
+// In produzione i log informativi sono disattivati di default.
+const SW_LOG_LEVEL = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1' ? 'debug' : 'error';
+
+const SW_LOG_LEVELS = {
+  silent: 0,
+  error: 1,
+  warn: 2,
+  info: 3,
+  debug: 4,
+};
+
+function canLog(level) {
+  return SW_LOG_LEVELS[level] <= SW_LOG_LEVELS[SW_LOG_LEVEL];
+}
+
+function swLog(...args) {
+  if (canLog('info')) {
+    console.log(...args);
+  }
+}
+
+function swWarn(...args) {
+  if (canLog('warn')) {
+    console.warn(...args);
+  }
+}
+
+function swError(...args) {
+  if (canLog('error')) {
+    console.error(...args);
+  }
+}
+
 // 1. Evento Install: opzionale, pulisce o prepara la cache
 self.addEventListener('install', (event) => {
   // Forza il Service Worker ad attivarsi immediatamente senza attendere la chiusura della scheda
@@ -13,7 +47,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
-            console.log('Eliminazione vecchia cache:', cache);
+            swLog('Eliminazione vecchia cache:', cache);
             return caches.delete(cache);
           }
         })
@@ -36,7 +70,7 @@ self.addEventListener('fetch', (event) => {
         const cachedResponse = await cache.match(request.url);
         if (cachedResponse) {
           // Trovata in cache! La restituiamo subito
-          console.log('Immagine servita dalla cache:', request.url);
+          swLog('Immagine servita dalla cache:', request.url);
           return cachedResponse;
         }
 
@@ -48,12 +82,12 @@ self.addEventListener('fetch', (event) => {
           if (networkResponse && (networkResponse.ok || networkResponse.type === 'opaque')) {
             // Nota: cloniamo la risposta perché il body di una Response può essere letto una sola volta
             await cache.put(request.url, networkResponse.clone());
-            console.log('Immagine salvata in cache:', request.url);
+            swLog('Immagine salvata in cache:', request.url);
           }
 
           return networkResponse;
         } catch (error) {
-          console.error('Download immagine fallito (offline e non in cache):', error);
+          swError('Download immagine fallito (offline e non in cache):', error);
           // Opzionale: puoi restituire un'immagine di fallback / placeholder locale
           return cache.match('/img/no-image.jpg');
         }

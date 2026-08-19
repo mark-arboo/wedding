@@ -10,16 +10,15 @@ async function loadFeed(feedContainer) {
     const result = await response.json();
 
     if (result.status === "success") {
-      feedContainer.innerHTML = ""; // Pulisci il caricamento
+      
+      return result.data;
 
+       /*
       if (result.data.length === 0) {
           feedContainer.innerHTML = "<p style='text-align:center;'>Nessun elemento presente nella galleria.</p>";
           return;
       }
 
-      return result.data;
-
-      /*
       result.data.forEach(item => {
         const postElement = document.createElement("div");
         postElement.className = "post";
@@ -48,11 +47,13 @@ async function loadFeed(feedContainer) {
       */
 
     } else {
-      feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Errore nel caricamento della galleria.</p>";
+      throw new Error("Errore nel caricamento della galleria.")
+      //feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Errore nel caricamento della galleria.</p>";
     }
   } catch (err) {
     console.error(err);
-    feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Impossibile connettersi a Google Drive.</p>";
+    throw new Error("Impossibile connettersi a Google Drive.");
+    //feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Impossibile connettersi a Google Drive.</p>";
   }
 }
 

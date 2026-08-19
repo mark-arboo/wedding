@@ -23,7 +23,18 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
   </head>
   <body>
+    <script>
+      // per produzione i log sono disabilitati
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      console.log("isProduction:", isProduction);
 
+      if (isProduction) {
+        console.log = () => {};
+        console.warn = () => {};
+        console.info = () => {};
+        console.error = () => {};
+      }
+    </script>
     <script src="./script/gdrive.js"></script>
     <script src="./script/core.js"></script>
 

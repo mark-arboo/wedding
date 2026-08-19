@@ -1,4 +1,3 @@
-
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
@@ -33,6 +32,114 @@ const slideshowState = {
     imageUrls: [],
     currentIndex: 0
 };
+
+const GRID_FEED_STATE_KEY = 'gridFeedState';
+const SLIDESHOW_STATE_KEY = 'slideshowState';
+
+function getSerializableGridFeedState() {
+    return {
+        sortedData: Array.isArray(gridFeedState.sortedData) ? gridFeedState.sortedData : [],
+        renderedCount: Number.isFinite(gridFeedState.renderedCount) ? gridFeedState.renderedCount : 0,
+        isAppending: false
+    };
+}
+
+function getSerializableSlideshowState() {
+    return {
+        imageUrls: Array.isArray(slideshowState.imageUrls) ? slideshowState.imageUrls : [],
+        currentIndex: Number.isFinite(slideshowState.currentIndex) ? slideshowState.currentIndex : 0
+    };
+}
+
+function saveGridFeedStateToSession() {
+    sessionStorage.setItem(GRID_FEED_STATE_KEY, JSON.stringify(getSerializableGridFeedState()));
+}
+
+function saveSlideshowStateToSession() {
+    sessionStorage.setItem(SLIDESHOW_STATE_KEY, JSON.stringify(getSerializableSlideshowState()));
+}
+
+function saveAppStatesToSession() {
+    saveGridFeedStateToSession();
+    saveSlideshowStateToSession();
+}
+
+function readAppStatesFromSession() {
+    const gridRaw = sessionStorage.getItem(GRID_FEED_STATE_KEY);
+    const slideshowRaw = sessionStorage.getItem(SLIDESHOW_STATE_KEY);
+
+    if (!gridRaw || !slideshowRaw) {
+        return null;
+    }
+
+    try {
+        const parsedGridState = JSON.parse(gridRaw);
+        const parsedSlideshowState = JSON.parse(slideshowRaw);
+
+        if (!parsedGridState || !Array.isArray(parsedGridState.sortedData)) {
+            return null;
+        }
+
+        if (!parsedSlideshowState || !Array.isArray(parsedSlideshowState.imageUrls)) {
+            return null;
+        }
+
+        return {
+            grid: {
+                sortedData: parsedGridState.sortedData,
+                renderedCount: Number.isFinite(parsedGridState.renderedCount) ? parsedGridState.renderedCount : 0,
+                isAppending: false
+            },
+            slideshow: {
+                imageUrls: parsedSlideshowState.imageUrls,
+                currentIndex: Number.isFinite(parsedSlideshowState.currentIndex) ? parsedSlideshowState.currentIndex : 0
+            }
+        };
+    } catch (error) {
+        console.warn('Stato sessionStorage non valido, verrà ignorato:', error);
+        return null;
+    }
+}
+
+function applyStatesFromSession(sessionStates) {
+    if (!sessionStates) {
+        return false;
+    }
+
+    gridFeedState.sortedData = sessionStates.grid.sortedData;
+    gridFeedState.renderedCount = 0;
+    gridFeedState.isAppending = false;
+
+    slideshowState.imageUrls = sessionStates.slideshow.imageUrls;
+    slideshowState.currentIndex = sessionStates.slideshow.currentIndex;
+
+    return true;
+}
+
+function tryRestoreGridPanelFromSession(feedContainer) {
+    if (!feedContainer) {
+        return false;
+    }
+
+    const sessionStates = readAppStatesFromSession();
+    if (!applyStatesFromSession(sessionStates)) {
+        return false;
+    }
+
+    if (gridFeedState.sortedData.length === 0) {
+        feedContainer.innerHTML = "<p style='text-align:center;'>Nessun elemento presente nella galleria.</p>";
+        initializeSlideshow([]);
+        saveAppStatesToSession();
+        return true;
+    }
+
+    feedContainer.innerHTML = '';
+    appendNextGridPage(feedContainer);
+    setupGridInfiniteScroll(feedContainer);
+    initializeSlideshow(gridFeedState.sortedData);
+    saveAppStatesToSession();
+    return true;
+}
 
 
 
@@ -134,6 +241,10 @@ function showLoginPanel() {
     // Logica per mostrare il pannello del menu
     hideAllPanels();
 
+    // Reset dello stato della Grid e dello Slideshow
+    resetGridPaginationState();
+    resetSlideshow();
+
     sessionStorage.setItem('lastActivePanel', 'login');
     document.getElementById('login-screen').style.display = 'block';
 
@@ -181,20 +292,33 @@ function showLoginPanel() {
 }
 
 async function showGridPanel() {
-    // Logica per mostrare il pannello del menu
-    console.log("Entrato in showGridPanel()");
-   
+
     hideAllPanels();
     document.getElementById('slideshow-image').src = "";
     document.getElementById('grid-screen').style.display = 'block';
 
     const feedContainer = document.getElementById('feed');
+
+    if (tryRestoreGridPanelFromSession(feedContainer)) {
+        sessionStorage.setItem('lastActivePanel', 'grid');
+        console.log("Grid panel restored from sessionStorage.");
+        return;
+    }
+
+    // Logica per mostrare il pannello del menu
+    console.log("Entrato in showGridPanel()");
+
     if (feedContainer) {
         feedContainer.innerHTML = "<div class='grid-loading'><span class='loading-spinner' aria-label='Caricamento in corso'></span></div>";
     }
 
     try {
         const data = await loadFeed(feedContainer);
+
+        if (data.length === 0) {
+          feedContainer.innerHTML = "<p style='text-align:center;'>Nessun elemento presente nella galleria.</p>";
+          return;
+        }
 
         // loadFeed gestisce già i messaggi di errore/vuoto sul container.
         if (!Array.isArray(data) || !feedContainer) {
@@ -208,14 +332,20 @@ async function showGridPanel() {
 
         initializeSlideshow(sortedData);
 
+      
+
         gridFeedState.sortedData = sortedData;
         feedContainer.innerHTML = '';
 
         appendNextGridPage(feedContainer);
         setupGridInfiniteScroll(feedContainer);
+        saveAppStatesToSession();
+        
     } catch (error) {
         console.error('Errore in showGridPanel:', error);
         resetSlideshow();
+        resetGridPaginationState();
+        
         if (feedContainer) {
             feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Errore nel caricamento della galleria.</p>";
         }
@@ -240,6 +370,7 @@ function resetGridPaginationState() {
     gridFeedState.observer = null;
     gridFeedState.sentinel = null;
     gridFeedState.isAppending = false;
+    saveGridFeedStateToSession();
 }
 
 function resetSlideshow() {
@@ -250,6 +381,7 @@ function resetSlideshow() {
     slideshowState.timerId = null;
     slideshowState.imageUrls = [];
     slideshowState.currentIndex = 0;
+    saveSlideshowStateToSession();
 }
 
 function transitionSlideshowImage(nextImageUrl) {
@@ -287,20 +419,24 @@ function initializeSlideshow(sortedData) {
 
     if (imageUrls.length === 0) {
         slideshowImage.src = 'img/no-image.jpg';
+        saveSlideshowStateToSession();
         return;
     }
 
     slideshowState.imageUrls = imageUrls;
     slideshowState.currentIndex = 0;
     slideshowImage.src = imageUrls[0];
+    saveSlideshowStateToSession();
 
     if (imageUrls.length === 1) {
         return;
     }
-
+    
+    // Funzione di slideshow che cambia immagine ogni SLIDESHOW_INTERVAL millisecondi
     slideshowState.timerId = window.setInterval(function() {
         slideshowState.currentIndex = (slideshowState.currentIndex + 1) % slideshowState.imageUrls.length;
         transitionSlideshowImage(slideshowState.imageUrls[slideshowState.currentIndex]);
+        saveSlideshowStateToSession();
     }, SLIDESHOW_INTERVAL);
 }
 
@@ -337,6 +473,7 @@ function appendNextGridPage(feedContainer) {
     const chunkHtml = gridFeedState.sortedData.slice(start, end).map(createGalleryItemMarkup).join('');
     feedContainer.insertAdjacentHTML('beforeend', chunkHtml);
     gridFeedState.renderedCount = end;
+    saveGridFeedStateToSession();
 
     if (gridFeedState.renderedCount >= totalItems && gridFeedState.observer) {
         gridFeedState.observer.disconnect();
@@ -388,8 +525,7 @@ function showFeedPanel() {
 }
 
 function hideAllPanels() {
-    resetGridPaginationState();
-    resetSlideshow();
+
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('grid-screen').style.display = 'none';
     document.getElementById('feed-screen').style.display = 'none';
