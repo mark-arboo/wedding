@@ -33,13 +33,12 @@ window.addEventListener('touchstart', (e) => {
    const lastPanel = sessionStorage.getItem('lastActivePanel');
    if (lastPanel !== 'grid') return; // Attiva la logica solo se il pannello attivo è la Grid
 
-   console.log("Touch start detected. Current scroll position:", window.scrollY);
-
   // Attiva la logica solo se la pagina si trova in cima
   if (window.scrollY === 0) {
     startY = e.touches[0].pageY;
     isPulling = true;
   }
+
 }, { passive: true });
 
 // 2. Mentre l'utente trascina il dito verso il basso
@@ -48,8 +47,6 @@ window.addEventListener('touchmove', (e) => {
   if (lastPanel !== 'grid') return; // Attiva la logica solo se il pannello attivo è la Grid
 
   if (!isPulling) return;
-
-  console.log("Touch move detected. Current scroll position:", window.scrollY);
 
   currentY = e.touches[0].pageY;
   const distance = currentY - startY;
@@ -75,16 +72,14 @@ window.addEventListener('touchend', async () => {
 
   if (!isPulling) return;
 
-  console.log("Touch end detected. Current scroll position:", window.scrollY);
-
   isPulling = false;
 
   const distance = currentY - startY;
   const pulledDistance = distance / 2.5;
 
   if (pulledDistance >= PULL_THRESHOLD) {
-    ptrText.textContent = 'Aggiornamento in corso...';
-    ptrIndicator.style.height = '50px'; // Mantiene visibile lo spinner/testo
+    //ptrText.textContent = 'Aggiornamento in corso...';
+    //ptrIndicator.style.height = '50px'; // Mantiene visibile lo spinner/testo
 
     // --- Inserisci qui la tua funzione di aggiornamento ---
     await refreshGalleryData(); 
