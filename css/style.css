@@ -244,10 +244,11 @@
 #signout {
 	position: absolute;
 	top: 12px;
-	right: 12px;
+	left: 12px;
 	width: 45px;
 	height: 45px;
-	font-size: 1.5rem;
+	font-size: 2rem;
+	font-weight: 700;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -358,7 +359,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: #f0f0f0;
+    background-color: #fff;
     transition: height 0.2s ease;
     font-size: 1rem;
     color: var(--primary);

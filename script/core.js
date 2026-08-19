@@ -30,13 +30,15 @@ let ptrText;
 // 1. Quando l'utente tocca lo schermo
 window.addEventListener('touchstart', (e) => {
 
-   const lastPanel = sessionStorage.getItem('lastActivePanel');
-   if (lastPanel !== 'grid') return; // Attiva la logica solo se il pannello attivo è la Grid
+  const lastPanel = sessionStorage.getItem('lastActivePanel');
+  if (lastPanel !== 'grid') return; // Attiva la logica solo se il pannello attivo è la Grid
 
   // Attiva la logica solo se la pagina si trova in cima
-  if (window.scrollY === 0) {
+  if (document.getElementById('grid-screen').scrollTop === 0) {
     startY = e.touches[0].pageY;
     isPulling = true;
+
+    console.log("Touch start: ", startY, "scrollTop: ", document.getElementById('grid-screen').scrollTop);
   }
 
 }, { passive: true });
@@ -62,6 +64,8 @@ window.addEventListener('touchmove', (e) => {
     } else {
       ptrText.textContent = 'Scorri per aggiornare';
     }
+
+    console.log("Touch move: ", startY, "Current Y: ", currentY);
   }
 }, { passive: true });
 
@@ -80,6 +84,7 @@ window.addEventListener('touchend', async () => {
   if (pulledDistance >= PULL_THRESHOLD) {
     //ptrText.textContent = 'Aggiornamento in corso...';
     //ptrIndicator.style.height = '50px'; // Mantiene visibile lo spinner/testo
+    console.log("Touch end: ", startY, "Current Y: ", currentY);
 
     // --- Inserisci qui la tua funzione di aggiornamento ---
     await refreshGalleryData(); 
@@ -403,10 +408,10 @@ async function showGridPanel() {
     }
 
     // Logica per mostrare il pannello del menu
-    console.log("Entrato in showGridPanel()");
+    console.log("Richiesta dati per la galleria a Google Drive...");
 
     document.getElementById('slideshow-image').style.display = "none"; // Nasconde l'immagine dello slideshow durante l'aggiornamento
-    
+
     if (feedContainer) {
         feedContainer.innerHTML = "<div class='grid-loading'><span class='loading-spinner' aria-label='Caricamento in corso'></span></div>";
     }
@@ -564,10 +569,8 @@ function appendNextGridPage(feedContainer) {
     const start = gridFeedState.renderedCount;
     const end = Math.min(start + GRID_PAGE_SIZE, totalItems);
 
-    if (start > 0) {
-        console.log(`Caricamento paginato attivato: elementi ${start + 1}-${end} di ${totalItems}`);
-    }
-
+    console.log(`Caricamento paginato attivato: elementi ${start + 1}-${end} di ${totalItems}`);
+   
     const chunkHtml = gridFeedState.sortedData.slice(start, end).map(createGalleryItemMarkup).join('');
     feedContainer.insertAdjacentHTML('beforeend', chunkHtml);
     gridFeedState.renderedCount = end;
