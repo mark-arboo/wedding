@@ -66,21 +66,21 @@ window.addEventListener('touchmove', (e) => {
 
   // Stiamo trascinando verso il basso
     if (pulledDistance > 0) {
-    // Applichiamo una resistenza fisica (diviso 2.5) per rendere il movimento fluido
+        // Applichiamo una resistenza fisica (diviso 2.5) per rendere il movimento fluido
         const visibleDistance = Math.min(pulledDistance, PULL_THRESHOLD + 20);
         ptrIndicator.style.height = `${visibleDistance}px`;
 
         if (visibleDistance >= PULL_THRESHOLD) {
-      ptrText.textContent = 'Rilascia per aggiornare';
-    } else {
-      ptrText.textContent = 'Scorri per aggiornare';
-    }
+        ptrText.textContent = 'Rilascia per aggiornare';
+        } else {
+        ptrText.textContent = 'Scorri per aggiornare';
+        }
 
-    console.log("Touch move: ", startY, "Current Y: ", currentY);
+        console.log("Touch move: ", startY, "Current Y: ", currentY);
     } else {
         ptrIndicator.style.height = '0px';
         ptrText.textContent = 'Scorri per aggiornare';
-  }
+    }
 }, { passive: true });
 
 // 3. Quando l'utente stacca il dito dallo schermo
@@ -430,7 +430,7 @@ async function showGridPanel() {
     }
 
     try {
-        const data = await loadFeed(feedContainer);
+        const data = await loadFeed();
 
         if (data.length === 0) {
           feedContainer.innerHTML = "<p style='text-align:center;'>Nessun elemento presente nella galleria.</p>";

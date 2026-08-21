@@ -1,59 +1,23 @@
  // INCOLLA QUI L'URL DELL'APPLICAZIONE WEB DI GOOGLE APPS SCRIPT
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvpSF6iXQ41oYE6pZDsIKvQlK83vWYt8s7auqQIrKfofzsr7weOliFmLdLO-WD5oHY/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxOQzfD13RIBR-sA0uwk1dB_SSd-EK2AKE_vAKsuGUwEvZHe1FSGGSt2GDYlZG8ngXL/exec";
 
 
 // 1. Funzione per caricare le immagini/video da Google Drive
-async function loadFeed(feedContainer) {
+async function loadFeed() {
   // const feedContainer = document.getElementById(root);
   try {
-    const response = await fetch(APPS_SCRIPT_URL);
+    const response = await fetch(`${APPS_SCRIPT_URL}?action=getImageList`);
     const result = await response.json();
 
-    if (result.status === "success") {
-      
+    if (result && result.status === "success" && Array.isArray(result.data)) {
       return result.data;
-
-       /*
-      if (result.data.length === 0) {
-          feedContainer.innerHTML = "<p style='text-align:center;'>Nessun elemento presente nella galleria.</p>";
-          return;
-      }
-
-      result.data.forEach(item => {
-        const postElement = document.createElement("div");
-        postElement.className = "post";
-
-        // Determina se è un'immagine o un video
-        let mediaHtml = "";
-        if (item.mimeType.startsWith("video/")) {
-          mediaHtml = `<video src="${item.src}" controls playsinline></video>`;
-        } else {
-          mediaHtml = `<img src="${item.src}" alt="Post Media" loading="lazy" />`;
-        }
-
-        const formattedDate = new Date(item.created).toLocaleDateString("it-IT", {
-          day: 'numeric', month: 'short', year: 'numeric'
-        });
-
-        postElement.innerHTML = `
-          <div class="post-header">Google Drive Media</div>
-          <div class="post-media">${mediaHtml}</div>
-          ${item.caption ? `<div class="post-caption"><strong>Drive User</strong> ${item.caption}</div>` : ''}
-          <div class="post-time">${formattedDate}</div>
-        `;
-
-        feedContainer.appendChild(postElement);
-      });
-      */
-
-    } else {
-      throw new Error("Errore nel caricamento della galleria.")
-      //feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Errore nel caricamento della galleria.</p>";
     }
+
+    throw new Error("Errore nel caricamento della galleria.");
+   
   } catch (err) {
     console.error(err);
     throw new Error("Impossibile connettersi a Google Drive.");
-    //feedContainer.innerHTML = "<p style='text-align:center; color:red;'>Impossibile connettersi a Google Drive.</p>";
   }
 }
 
@@ -86,7 +50,7 @@ async function uploadMedia() {
       caption: captionInput.value
     };
 
-    const response = await fetch(APPS_SCRIPT_URL, {
+    const response = await fetch(`${APPS_SCRIPT_URL}?action=uploadMedia`, {
       method: "POST",
       body: JSON.stringify(payload)
     });
