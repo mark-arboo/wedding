@@ -140,6 +140,18 @@ if ('serviceWorker' in navigator) {
 
 
 document.addEventListener('DOMContentLoaded', function() {
+    const submitButton = document.getElementById('login-submit');
+    const nameInput = document.getElementById('login-name');
+
+    if (submitButton) {
+        submitButton.addEventListener('click', handleLoginSubmit);
+    }
+
+    if (nameInput) {
+        nameInput.addEventListener('keydown', handleLoginNameKeydown);
+        nameInput.addEventListener('input', handleLoginNameInput);
+    }
+
     // Inizializza l'app controllando se è primo caricamento o refresh
     initializeApp();
 });
@@ -363,45 +375,120 @@ function showLoginPanel() {
 
     const nameInput = document.getElementById('login-name');
     const submitButton = document.getElementById('login-submit');
+    setLoginLoading(false);
 
     if (!nameInput || !submitButton) {
         return;
     }
+
+    submitButton.disabled = false;
 
     const savedUserName = localStorage.getItem('userName');
     if (savedUserName) {
         nameInput.value = savedUserName;
     }
 
-    const proceedToGrid = function() {
-        const userName = nameInput.value.trim();
+}
 
-        if (!userName) {
-            nameInput.classList.add('is-error');
-            nameInput.focus();
-            return;
-        }
+function handleLoginSubmit() {
+    const nameInput = document.getElementById('login-name');
+    const submitButton = document.getElementById('login-submit');
 
+    if (!nameInput || !submitButton) {
+        return;
+    }
+
+    const userName = nameInput.value.trim();
+
+    if (!userName) {
+        nameInput.classList.add('is-error');
+        nameInput.focus();
+        showMessage("Inserisci un nome valido per procedere.");
+        return;
+    }
+
+    nameInput.classList.remove('is-error');
+
+    // Verifica se l'username è cambiato rispetto a quello salvato in localStorage
+    const previousUserName = localStorage.getItem('userName');
+    if (previousUserName && previousUserName !== userName) {
+        // Se l'username è cambiato, rimuovi il token precedente
+        localStorage.removeItem('userToken');
+    }
+    localStorage.setItem('userName', userName);
+
+    let token = localStorage.getItem('userToken');
+    if (!token) {
+        token = generateToken(userName);
+        localStorage.setItem('userToken', token);
+    }
+
+    setLoginLoading(true);
+    submitButton.disabled = true;
+
+    login(userName, token)
+        .finally(function() {
+            setLoginLoading(false);
+            submitButton.disabled = false;
+        });
+}
+
+function handleLoginNameKeydown(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        handleLoginSubmit();
+    }
+}
+
+function handleLoginNameInput() {
+    const nameInput = document.getElementById('login-name');
+    if (nameInput && nameInput.value.trim()) {
         nameInput.classList.remove('is-error');
-        localStorage.setItem('userName', userName);
-        showGridPanel();
-    };
+    }
+}
 
-    submitButton.addEventListener('click', proceedToGrid);
+function setLoginLoading(isVisible) {
+    const loginLoading = document.getElementById('login-loading');
+    if (!loginLoading) {
+        return;
+    }
 
-    nameInput.addEventListener('keydown', function(event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            proceedToGrid();
-        }
-    });
+    loginLoading.classList.toggle('is-visible', !!isVisible);
+    loginLoading.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+}
 
-    nameInput.addEventListener('input', function() {
-        if (nameInput.value.trim()) {
-            nameInput.classList.remove('is-error');
-        }
-    });
+function showMessage(message) {
+    const modal = document.getElementById('message-modal');
+    const modalText = document.getElementById('message-modal-text');
 
+    if (!modal || !modalText) {
+        return;
+    }
+
+    modalText.textContent = message || 'Si e verificato un errore.';
+    modal.classList.add('is-visible');
+    modal.setAttribute('aria-hidden', 'false');
+
+    const okButton = document.getElementById('message-modal-ok');
+    if (okButton) {
+        okButton.focus();
+    }
+}
+
+function hideMessage() {
+    const modal = document.getElementById('message-modal');
+    if (!modal) {
+        return;
+    }
+
+    modal.classList.remove('is-visible');
+    modal.setAttribute('aria-hidden', 'true');
+}
+
+function generateToken(userName) {
+    const timestamp = Date.now();
+    const randomNum = Math.floor(Math.random() * 1000000);
+    return `${userName}-${timestamp}-${randomNum}`;
 }
 
 async function showGridPanel() {
@@ -460,6 +547,7 @@ async function showGridPanel() {
         console.error('Errore in showGridPanel: ', error.message);
         resetSlideshow();
         resetGridPaginationState();
+        showMessage(error.message || 'Impossibile caricare la galleria.');
         
         if (feedContainer) {
             feedContainer.innerHTML = "<p style='text-align:center; color:red;'>" + error.message + "</p>";
@@ -645,3 +733,20 @@ function hideAllPanels() {
 }
 
 
+function login(username, token) {
+    console.log("Tentativo di login per utente:", username);
+    
+    return glogin(username, token)
+        .then(() => {
+            console.log("Login riuscito per utente:", username);
+            showGridPanel();
+        })
+        .catch((error) => {
+            console.error("Errore durante il login:", error.message);
+            showMessage("Errore durante il login: " + error.message);
+            localStorage.removeItem('userName');
+            localStorage.removeItem('userToken');
+            showLoginPanel();
+        });
+
+}

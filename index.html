@@ -50,6 +50,9 @@
             <label for="login-name" class="login-label">Condividi le tue foto e video con noi per questo giorno speciale! </label>
             <input id="login-name" class="login-input" type="text" placeholder="Il tuo nome" autocomplete="name" maxlength="40">
             <button id="login-submit" class="login-button" type="button">Avanti <i class="fa fa-arrow-right" aria-hidden="true"></i></button>
+            <div id="login-loading" class="login-loading" aria-hidden="true">
+              <span class="loading-spinner" aria-label="Caricamento login"></span>
+            </div>
           </div>
         </div>
       </div>
@@ -102,6 +105,16 @@
 
     </div> 
 
+    <div id="message-modal" class="message-modal" role="dialog" aria-modal="true" aria-labelledby="message-modal-title" aria-describedby="message-modal-text" aria-hidden="true">
+      <div class="message-modal__content">
+        <h2 id="message-modal-title" class="message-modal__title">Attenzione</h2>
+        <p id="message-modal-text" class="message-modal__text"></p>
+        <button id="message-modal-ok" class="message-modal__button" type="button" onclick="hideMessage()">OK</button>
+      </div>
+    </div>
+
+
+    
 
 
 <!-- Form di Upload 

@@ -1,5 +1,5 @@
  // INCOLLA QUI L'URL DELL'APPLICAZIONE WEB DI GOOGLE APPS SCRIPT
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxOQzfD13RIBR-sA0uwk1dB_SSd-EK2AKE_vAKsuGUwEvZHe1FSGGSt2GDYlZG8ngXL/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyF651upTPqyYGoah0Z1_XgcQHdk-9WUqCOt9H0NSFzvVSBZLLiMacE_MFVhl_2AhY/exec";
 
 
 // 1. Funzione per caricare le immagini/video da Google Drive
@@ -19,6 +19,34 @@ async function loadFeed() {
     console.error(err);
     throw new Error("Impossibile connettersi a Google Drive.");
   }
+}
+
+async function glogin(user, token) {
+
+    // verifica se username e token sono validi (puoi aggiungere la tua logica di autenticazione qui)
+    if (!user || !token) {
+        throw new Error("utente o token non validi.");
+    }
+
+    const payload = {
+      user: user,
+      token: token
+    };
+  
+    const response = await fetch(`${APPS_SCRIPT_URL}?action=checkUserName`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+
+    if (result && result.status === "success") {
+      return true; // Login riuscito
+    } else {
+      throw new Error(result.message || "Errore durante il login.");
+    }
+
+
 }
 
 // 2. Funzione per inviare foto/video a Google Drive
@@ -55,7 +83,7 @@ async function uploadMedia() {
       body: JSON.stringify(payload)
     });
 
-    const result = await response.json();
+      
 
     if (result.status === "success") {
       statusDiv.style.color = "green";

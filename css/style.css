@@ -144,6 +144,17 @@
 	opacity: 0.92;
 }
 
+.login-loading {
+	min-height: 34px;
+	display: none;
+	justify-content: center;
+	align-items: center;
+}
+
+.login-loading.is-visible {
+	display: flex;
+}
+
 @media (min-width: 768px) {
 	.login-overlay {
 		padding-left: 32px;
@@ -365,3 +376,61 @@
     font-size: 1rem;
     color: var(--primary);
   }
+
+.message-modal {
+	position: fixed;
+	inset: 0;
+	display: none;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+	background: rgba(0, 0, 0, 0.42);
+	z-index: 1200;
+}
+
+.message-modal.is-visible {
+	display: flex;
+}
+
+.message-modal__content {
+	width: min(460px, calc(100% - 48px));
+	background: var(--ivory);
+	color: var(--ink);
+	border-radius: 16px;
+	padding: 20px;
+	box-shadow: 0 14px 36px rgba(0, 0, 0, 0.26);
+	border: 1px solid rgba(253, 8, 144, 0.2);
+	text-align: center;
+}
+
+.message-modal__title {
+	font-family: 'Montserrat Local', 'Segoe UI', Arial, sans-serif;
+	font-size: 1.05rem;
+	font-weight: 600;
+	letter-spacing: 0.4px;
+	margin: 0;
+	text-transform: uppercase;
+}
+
+.message-modal__text {
+	margin: 14px 0 18px;
+	font-size: 1rem;
+	line-height: 1.35;
+	word-break: break-word;
+}
+
+.message-modal__button {
+	border: 0;
+	border-radius: 12px;
+	padding: 12px 24px;
+	font-size: 0.98rem;
+	font-weight: 700;
+	color: #fff;
+	background: var(--primary);
+	cursor: pointer;
+	min-width: 120px;
+}
+
+.message-modal__button:active {
+	opacity: 0.92;
+}
