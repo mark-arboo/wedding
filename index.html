@@ -113,7 +113,11 @@
         </div>
         <p id="upload-counter" class="upload-counter">0 / 4 file selezionati</p>
         <div id="upload-preview-grid" class="upload-preview-grid" aria-live="polite"></div>
-        <button id="upload-submitBtn" type="button" class="upload-submit" onclick="handleUploadSelectedFiles()" disabled><i class="fa fa-cloud-upload" aria-hidden="true"></i> Carica media</button>
+        <button id="upload-submitBtn" type="button" class="upload-submit" onclick="handleUploadSelectedFiles()" disabled>
+          <span class="loading-spinner upload-submit-spinner" aria-hidden="true"></span>
+          <i class="fa fa-cloud-upload upload-submit-icon" aria-hidden="true"></i>
+          <span class="upload-submit-label">Carica media</span>
+        </button>
       </div>
 
     </div>

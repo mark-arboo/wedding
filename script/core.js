@@ -532,7 +532,8 @@ async function showGridPanel() {
         const data = await loadFeed();
 
         if (data.length === 0) {
-          feedContainer.innerHTML = "<p style='text-align:center;'>Nessun elemento presente nella galleria.</p>";
+          showMessage("Nessun elemento presente nella galleria.")
+          feedContainer.innerHTML = "<p style='text-align:center;'></p>";
           return;
         }
 
@@ -562,7 +563,7 @@ async function showGridPanel() {
         showMessage(error.message || 'Impossibile caricare la galleria.');
         
         if (feedContainer) {
-            feedContainer.innerHTML = "<p style='text-align:center; color:red;'>" + error.message + "</p>";
+            feedContainer.innerHTML = "<p style='text-align:center; color:red;'></p>";
         }
     }
 
@@ -783,7 +784,7 @@ function showSelectedFiles() {
     const mergedFiles = selectedFiles.concat(newFiles);
 
     if (mergedFiles.length > MAX_SELECTED_FILES) {
-        showMessage("Puoi selezionare al massimo 4 file.");
+        showMessage("Puoi selezionare al massimo 4 file alla volta.");
     }
 
     selectedFiles = mergedFiles.slice(0, MAX_SELECTED_FILES);
@@ -839,11 +840,17 @@ async function handleUploadSelectedFiles() {
     }
 
     const uploadSubmitButton = document.getElementById('upload-submitBtn');
-    const originalLabel = uploadSubmitButton ? uploadSubmitButton.textContent : '';
+    const uploadSubmitLabel = uploadSubmitButton ? uploadSubmitButton.querySelector('.upload-submit-label') : null;
+    const originalLabel = uploadSubmitLabel ? uploadSubmitLabel.textContent : 'Carica media';
 
     if (uploadSubmitButton) {
         uploadSubmitButton.disabled = true;
-        uploadSubmitButton.textContent = 'Caricamento in corso...';
+        uploadSubmitButton.classList.add('is-loading');
+        uploadSubmitButton.setAttribute('aria-busy', 'true');
+    }
+
+    if (uploadSubmitLabel) {
+        uploadSubmitLabel.textContent = 'Caricamento in corso...';
     }
 
     try {
@@ -861,8 +868,13 @@ async function handleUploadSelectedFiles() {
         const uploadError = error && error.message ? error.message : 'Errore durante il caricamento dei file.';
         showMessage(uploadError);
     } finally {
+        if (uploadSubmitLabel) {
+            uploadSubmitLabel.textContent = originalLabel;
+        }
+
         if (uploadSubmitButton) {
-            uploadSubmitButton.textContent = originalLabel || 'Carica file';
+            uploadSubmitButton.classList.remove('is-loading');
+            uploadSubmitButton.setAttribute('aria-busy', 'false');
             uploadSubmitButton.disabled = selectedFiles.length === 0;
         }
     }
