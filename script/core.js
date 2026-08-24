@@ -17,6 +17,10 @@ const slideshowState = {
 
 const GRID_FEED_STATE_KEY = 'gridFeedState';
 const SLIDESHOW_STATE_KEY = 'slideshowState';
+const MAX_SELECTED_FILES = 4;
+
+let selectedFiles = []; // Array per memorizzare i file selezionati per l'upload
+
 
 let startY = 0;
 let currentY = 0;
@@ -144,12 +148,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const nameInput = document.getElementById('login-name');
 
     if (submitButton) {
-        submitButton.addEventListener('click', handleLoginSubmit);
+        submitButton.onclick = handleLoginSubmit;
     }
 
     if (nameInput) {
-        nameInput.addEventListener('keydown', handleLoginNameKeydown);
-        nameInput.addEventListener('input', handleLoginNameInput);
+        nameInput.onkeydown = handleLoginNameKeydown;
+        nameInput.oninput = handleLoginNameInput;
     }
 
     // Inizializza l'app controllando se è primo caricamento o refresh
@@ -349,6 +353,9 @@ function onPageRefresh() {
             case 'login':
                 showLoginPanel();
                 break;
+            case 'upload':
+                showUploadPanel();
+                break;
             case 'feed':
                 showFeedPanel();
                 break;          
@@ -380,6 +387,11 @@ function showLoginPanel() {
     if (!nameInput || !submitButton) {
         return;
     }
+
+    // Re-bind difensivo: garantisce i listener anche dopo eventuali re-render/rimpiazzi DOM.
+    submitButton.onclick = handleLoginSubmit;
+    nameInput.onkeydown = handleLoginNameKeydown;
+    nameInput.oninput = handleLoginNameInput;
 
     submitButton.disabled = false;
 
@@ -725,10 +737,18 @@ function showFeedPanel() {
     document.getElementById('feed-screen').style.display = 'block';
 }
 
+function showUploadPanel() {
+    hideAllPanels();
+    sessionStorage.setItem('lastActivePanel', 'upload');
+    document.getElementById('upload-screen').style.display = 'block';
+    renderSelectedFilesGrid();
+}
+
 function hideAllPanels() {
 
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('grid-screen').style.display = 'none';
+    document.getElementById('upload-screen').style.display = 'none';
     document.getElementById('feed-screen').style.display = 'none';
 }
 
@@ -750,3 +770,101 @@ function login(username, token) {
         });
 
 }
+
+function showSelectedFiles() {
+
+    const fileInput = document.getElementById('fileInput');
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        showMessage("Nessun file selezionato. Seleziona almeno un file prima di caricare.");
+        return;
+    }
+
+    const newFiles = Array.from(fileInput.files);
+    const mergedFiles = selectedFiles.concat(newFiles);
+
+    if (mergedFiles.length > MAX_SELECTED_FILES) {
+        showMessage("Puoi selezionare al massimo 4 file.");
+    }
+
+    selectedFiles = mergedFiles.slice(0, MAX_SELECTED_FILES);
+    fileInput.value = '';
+
+    showUploadPanel();
+
+}
+
+function removeSelectedFile(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= selectedFiles.length) {
+        return;
+    }
+
+    selectedFiles.splice(index, 1);
+    renderSelectedFilesGrid();
+}
+
+function renderSelectedFilesGrid() {
+    const grid = document.getElementById('upload-preview-grid');
+    const counter = document.getElementById('upload-counter');
+    const uploadSubmitButton = document.getElementById('upload-submitBtn');
+
+    if (!grid || !counter || !uploadSubmitButton) {
+        return;
+    }
+
+    uploadSubmitButton.disabled = selectedFiles.length === 0;
+    counter.textContent = `${selectedFiles.length} / ${MAX_SELECTED_FILES} file selezionati`;
+
+    if (selectedFiles.length === 0) {
+        grid.innerHTML = '<div class="upload-empty">Nessun file selezionato. Tocca "Aggiungi" per scegliere foto o video.</div>';
+        return;
+    }
+
+    const markup = selectedFiles.map(function(file, index) {
+        const previewUrl = URL.createObjectURL(file);
+        const isVideo = file.type && file.type.startsWith('video/');
+        const media = isVideo
+            ? `<video src="${previewUrl}" controls playsinline preload="metadata"></video>`
+            : `<img src="${previewUrl}" alt="Anteprima file selezionato" loading="lazy" />`;
+
+        return `<div class="upload-card">${media}<button class="upload-remove" type="button" onclick="removeSelectedFile(${index})" aria-label="Rimuovi file">X</button></div>`;
+    }).join('');
+
+    grid.innerHTML = markup;
+}
+
+async function handleUploadSelectedFiles() {
+    if (!Array.isArray(selectedFiles) || selectedFiles.length === 0) {
+        showMessage("Nessun file selezionato. Aggiungi almeno un file.");
+        return;
+    }
+
+    const uploadSubmitButton = document.getElementById('upload-submitBtn');
+    const originalLabel = uploadSubmitButton ? uploadSubmitButton.textContent : '';
+
+    if (uploadSubmitButton) {
+        uploadSubmitButton.disabled = true;
+        uploadSubmitButton.textContent = 'Caricamento in corso...';
+    }
+
+    try {
+        await uploadMedia(selectedFiles, localStorage.getItem('userName'));
+        selectedFiles = [];
+        renderSelectedFilesGrid();
+        showMessage('File caricati con successo.');
+
+        // Reset dello stato della Grid e dello Slideshow
+        resetGridPaginationState();
+        resetSlideshow();
+        
+        showGridPanel();
+    } catch (error) {
+        const uploadError = error && error.message ? error.message : 'Errore durante il caricamento dei file.';
+        showMessage(uploadError);
+    } finally {
+        if (uploadSubmitButton) {
+            uploadSubmitButton.textContent = originalLabel || 'Carica file';
+            uploadSubmitButton.disabled = selectedFiles.length === 0;
+        }
+    }
+}
+

@@ -1,5 +1,5 @@
  // INCOLLA QUI L'URL DELL'APPLICAZIONE WEB DI GOOGLE APPS SCRIPT
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyF651upTPqyYGoah0Z1_XgcQHdk-9WUqCOt9H0NSFzvVSBZLLiMacE_MFVhl_2AhY/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw_v-alYV3sdypbDgGIIA0DRNtgKj4aLXaAcX9bsdJLccIq2cTjk7cJonzXhvHiKmKq/exec";
 
 
 // 1. Funzione per caricare le immagini/video da Google Drive
@@ -29,6 +29,7 @@ async function glogin(user, token) {
     }
 
     const payload = {
+      action: "checkUserName",
       user: user,
       token: token
     };
@@ -50,32 +51,21 @@ async function glogin(user, token) {
 }
 
 // 2. Funzione per inviare foto/video a Google Drive
-async function uploadMedia() {
-  const fileInput = document.getElementById("fileInput");
-  const captionInput = document.getElementById("captionInput");
-  const uploadBtn = document.getElementById("uploadBtn");
-  const statusDiv = document.getElementById("uploadStatus");
-
-  const file = fileInput.files[0];
-  if (!file) {
-    alert("Seleziona un file (immagine o video) prima di caricare!");
-    return;
+async function uploadMedia(files, user) {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new Error("Nessun file selezionato per il caricamento.");
   }
 
-  // Blocco UI
-  uploadBtn.disabled = true;
-  statusDiv.style.color = "#000";
-  statusDiv.innerText = "Caricamento in corso... In base alla dimensione del file potrebbe richiedere qualche secondo.";
-
-  try {
+  for (const file of files) {
     // Converti il file in base64
     const base64Data = await convertFileToBase64(file);
 
     const payload = {
+      action: "uploadMedia",
       fileName: file.name,
       mimeType: file.type,
-      fileData: base64Data.split(",")[1], // Rimuovi il prefisso data:URL
-      caption: captionInput.value
+      fileData: String(base64Data).split(",")[1], // Rimuovi il prefisso data:URL
+      caption: user
     };
 
     const response = await fetch(`${APPS_SCRIPT_URL}?action=uploadMedia`, {
@@ -83,33 +73,13 @@ async function uploadMedia() {
       body: JSON.stringify(payload)
     });
 
-      
-
-    if (result.status === "success") {
-      statusDiv.style.color = "green";
-      statusDiv.innerText = "Caricato con successo!";
-      
-      // Reset form
-      fileInput.value = "";
-      captionInput.value = "";
-      
-      // Ricarica il feed per mostrare la nuova foto/video
-      setTimeout(() => {
-        statusDiv.innerText = "";
-        loadFeed();
-      }, 1500);
-
-    } else {
-      throw new Error(result.message);
+    const result = await response.json();
+    if (!result || result.status !== "success") {
+      throw new Error((result && result.message) || "Errore durante l'upload del file.");
     }
-
-  } catch (err) {
-    console.error(err);
-    statusDiv.style.color = "red";
-    statusDiv.innerText = "Errore durante l'upload. Riprova.";
-  } finally {
-    uploadBtn.disabled = false;
   }
+
+  return true;
 }
 
 // Utility per convertire File -> Base64 String

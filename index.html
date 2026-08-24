@@ -76,7 +76,7 @@
           <div id="signout" onclick="showLoginPanel()">
             <i class="fa fa-arrow-left" aria-hidden="true"></i>
           </div>
-          <button id="slideshow-uploadBtn" onclick="">
+          <button id="slideshow-uploadBtn" type="button" onclick="showUploadPanel()">
             <i class="fa fa-plus-circle" aria-hidden="true"></i> Aggiungi all'album
           </button>
         </div>
@@ -99,6 +99,24 @@
       </div>
 
     </div> 
+
+    <!-- UPLOAD SCREEN -->
+    <div id="upload-screen" class="app-screen">
+      <div class="upload-layout">
+        <div class="upload-header">
+          <button type="button" class="upload-back" onclick="showGridPanel()" aria-label="Torna alla galleria">
+            <i class="fa fa-arrow-left" aria-hidden="true"></i>
+          </button>
+          <h2 class="upload-title">Media selezionati</h2>
+          <button type="button" class="upload-add" onclick="document.getElementById('fileInput').click();">Aggiungi</button>
+          <input type="file" id="fileInput" accept="image/*,video/*" multiple style="display:none;" onchange="showSelectedFiles()" />
+        </div>
+        <p id="upload-counter" class="upload-counter">0 / 4 file selezionati</p>
+        <div id="upload-preview-grid" class="upload-preview-grid" aria-live="polite"></div>
+        <button id="upload-submitBtn" type="button" class="upload-submit" onclick="handleUploadSelectedFiles()" disabled><i class="fa fa-cloud-upload" aria-hidden="true"></i> Carica media</button>
+      </div>
+
+    </div>
 
 
     <div id="feed-screen" class="app-screen">

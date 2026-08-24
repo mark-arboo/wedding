@@ -16,7 +16,7 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  const action = e && e.parameter ? e.parameter.action : null;
+  const action = getActionFromRequest(e);
 
   switch (action) {
     case 'uploadMedia':
@@ -29,6 +29,24 @@ function doPost(e) {
         message: "Azione POST non supportata"
       })).setMimeType(ContentService.MimeType.TEXT);
   }
+}
+
+function getActionFromRequest(e) {
+  const queryAction = e && e.parameter ? e.parameter.action : null;
+  if (queryAction) {
+    return queryAction;
+  }
+
+  try {
+    if (e && e.postData && e.postData.contents) {
+      const body = JSON.parse(e.postData.contents);
+      return body && body.action ? body.action : null;
+    }
+  } catch (error) {
+    // Ignora body non JSON
+  }
+
+  return null;
 }
 
 function checkUserName(e) {
