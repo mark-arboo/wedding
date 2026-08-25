@@ -124,7 +124,15 @@
 
 
     <div id="feed-screen" class="app-screen">
-
+      <div class="feed-layout">
+        <div class="feed-header">
+          <button type="button" class="feed-back" onclick="showGridPanel()" aria-label="Torna alla griglia">
+            <i class="fa fa-arrow-left" aria-hidden="true"></i>
+          </button>
+          <h2 class="feed-title">Album</h2>
+        </div>
+        <div id="feed-post-list" class="feed-post-list" aria-live="polite"></div>
+      </div>
     </div> 
 
     <!-- ERROR MODAL -->

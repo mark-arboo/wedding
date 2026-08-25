@@ -20,13 +20,13 @@
 	--ink: #332626;
 	--overlay-top: rgba(31, 19, 13, 0.22);
 	--overlay-bottom: rgba(31, 19, 13, 0.62);
+	--background: #000;
 }
-
 .app-screen {
 	width: 100%;
 	min-height: 100dvh;
 	display: none;
-	background-color: var(--ink);
+	background-color: var(--background);
 }
 
 #login-screen {
@@ -172,12 +172,12 @@
 	height: 100dvh;
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
-	background: #ffffff;
+	background: var(--background);
 }
 
 .grid-layout {
 	min-height: 100dvh;
-	background: #000;
+	background: var(--background);
 }
 
 #slideshow  {
@@ -442,7 +442,7 @@
 
 #upload-screen {
 	min-height: 100dvh;
-	background: --var(--ink);
+	background: var(--background);
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
 }
@@ -609,4 +609,152 @@
 	opacity: 0.45;
 	cursor: not-allowed;
 	box-shadow: none;
+}
+
+#feed-screen {
+	height: 100dvh;
+	background: var(--background);
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.feed-layout {
+	width: min(680px, 100%);
+	margin: 0 auto;
+	padding-bottom: 26px;
+	background: var(--background);
+}
+
+.feed-header {
+	position: sticky;
+	top: 0;
+	z-index: 30;
+	display: grid;
+	grid-template-columns: 45px 1fr 45px;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	background: rgba(255, 255, 255, 0.96);
+	backdrop-filter: blur(6px);
+	border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.feed-back {
+	width: 45px;
+	height: 45px;
+	border: 0;
+	border-radius: 50%;
+	background: var(--primary);
+	color: #fff;
+	font-size: 1.2rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.feed-title {
+	margin: 0;
+	text-align: center;
+	font-family: 'Montserrat Local', 'Segoe UI', Arial, sans-serif;
+	font-size: 0.98rem;
+	font-weight: 700;
+	letter-spacing: 0.6px;
+	text-transform: uppercase;
+	color: #262626;
+}
+
+.feed-post-list {
+	display: grid;
+	gap: 16px;
+	padding: 14px 0 0;
+}
+
+.feed-post {
+	/*border-top: 1px solid #dbdbdb;*/
+	/*border-bottom: 1px solid #dbdbdb;*/
+	background: #ffffff;
+}
+
+.feed-post-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+}
+
+.feed-post-avatar {
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	object-fit: cover;
+	border: 1px solid rgba(0, 0, 0, 0.12);
+	flex-shrink: 0;
+}
+
+.feed-post-user {
+	font-family: 'Montserrat Local', 'Segoe UI', Arial, sans-serif;
+	font-size: 0.9rem;
+	font-weight: 700;
+	color: #262626;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.feed-post-media {
+	width: 100%;
+	background: #000;
+	max-height: 78dvh;
+	overflow: hidden;
+}
+
+.feed-post-media img,
+.feed-post-media video {
+	width: 100%;
+	height: auto;
+	max-height: 78dvh;
+	object-fit: contain;
+	display: block;
+	margin: 0 auto;
+}
+
+.feed-post-meta {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	padding: 10px 12px 12px;
+	color: #262626;
+	font-size: 0.92rem;
+	font-weight: 600;
+}
+
+.feed-post-stat {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+}
+
+.feed-post-stat i {
+	font-size: 1.08rem;
+	line-height: 1;
+}
+
+.feed-post-stat .fa-heart {
+	background: #ffffff;
+	border-radius: 50%;
+	padding: 4px;
+}
+
+.feed-loading {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	min-height: 160px;
+}
+
+.feed-empty {
+	text-align: center;
+	color: #6a5454;
+	padding: 20px;
 }

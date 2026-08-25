@@ -1,6 +1,7 @@
 const SLIDESHOW_INTERVAL = 5000; // Intervallo di 5 secondi per lo slideshow
 const SLIDESHOW_NUM_IMAGES = 6; // Numero massimo di immagini da mostrare nello slideshow
 const GRID_PAGE_SIZE = 6;
+const FEED_PAGE_SIZE = 4;
 const gridFeedState = {
     sortedData: [],
     renderedCount: 0,
@@ -15,9 +16,18 @@ const slideshowState = {
     currentIndex: 0
 };
 
+const feedPanelState = {
+    sortedData: [],
+    renderedCount: 0,
+    observer: null,
+    sentinel: null,
+    isAppending: false
+};
+
 const GRID_FEED_STATE_KEY = 'gridFeedState';
 const SLIDESHOW_STATE_KEY = 'slideshowState';
 const MAX_SELECTED_FILES = 4;
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 let selectedFiles = []; // Array per memorizzare i file selezionati per l'upload
 
@@ -615,6 +625,25 @@ function transitionSlideshowImage(nextImageUrl) {
     }, 220);
 }
 
+function escapeText(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Placeholder: implementa qui la logica reale di conteggio like.
+async function getMediaLikesCount(mediaId) {
+    return 0;
+}
+
+// Placeholder: implementa qui la logica reale di conteggio commenti.
+async function getMediaCommentsCount(mediaId) {
+    return 0;
+}
+
 function initializeSlideshow(sortedData) {
     resetSlideshow();
 
@@ -655,12 +684,12 @@ function initializeSlideshow(sortedData) {
     }, SLIDESHOW_INTERVAL);
 }
 
-function createGalleryItemMarkup(item) {
+function createGalleryItemMarkup(item, index) {
     if (item.mimeType && item.mimeType.startsWith('video/')) {
-        return `<div class="gallery-item"><video src="${item.src}" controls playsinline preload="metadata"></video></div>`;
+        return `<div class="gallery-item" role="button" tabindex="0" onclick="openFeedPanelFromGridIndex(${index})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeedPanelFromGridIndex(${index});}"><video src="${item.src}" controls playsinline preload="metadata"></video></div>`;
     }
 
-    return `<div class="gallery-item"><img src="${item.src}" alt="Foto matrimonio" loading="lazy" /></div>`;
+    return `<div class="gallery-item" role="button" tabindex="0" onclick="openFeedPanelFromGridIndex(${index})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeedPanelFromGridIndex(${index});}"><img src="${item.src}" alt="Foto matrimonio" loading="lazy" /></div>`;
 }
 
 function appendNextGridPage(feedContainer) {
@@ -672,6 +701,7 @@ function appendNextGridPage(feedContainer) {
     if (gridFeedState.renderedCount >= totalItems) {
         if (gridFeedState.observer) {
             gridFeedState.observer.disconnect();
+            gridFeedState.observer = null;
         }
         return;
     }
@@ -683,16 +713,35 @@ function appendNextGridPage(feedContainer) {
 
     console.log(`Caricamento paginato attivato: elementi ${start + 1}-${end} di ${totalItems}`);
    
-    const chunkHtml = gridFeedState.sortedData.slice(start, end).map(createGalleryItemMarkup).join('');
+    const chunkHtml = gridFeedState.sortedData
+        .slice(start, end)
+        .map(function(item, chunkIndex) {
+            return createGalleryItemMarkup(item, start + chunkIndex);
+        })
+        .join('');
     feedContainer.insertAdjacentHTML('beforeend', chunkHtml);
     gridFeedState.renderedCount = end;
     saveGridFeedStateToSession();
 
     if (gridFeedState.renderedCount >= totalItems && gridFeedState.observer) {
         gridFeedState.observer.disconnect();
+        gridFeedState.observer = null;
     }
 
     gridFeedState.isAppending = false;
+}
+
+function detachGridInfiniteScroll() {
+    if (gridFeedState.observer) {
+        gridFeedState.observer.disconnect();
+        gridFeedState.observer = null;
+    }
+
+    if (gridFeedState.sentinel && gridFeedState.sentinel.parentNode) {
+        gridFeedState.sentinel.parentNode.removeChild(gridFeedState.sentinel);
+    }
+
+    gridFeedState.sentinel = null;
 }
 
 function setupGridInfiniteScroll(feedContainer) {
@@ -700,6 +749,8 @@ function setupGridInfiniteScroll(feedContainer) {
     if (!feedContainer || totalItems <= GRID_PAGE_SIZE) {
         return;
     }
+
+    detachGridInfiniteScroll();
 
     const sentinelParent = feedContainer.parentElement || feedContainer;
     const sentinel = document.createElement('div');
@@ -727,14 +778,219 @@ function setupGridInfiniteScroll(feedContainer) {
 }
 
 
-function showFeedPanel() {
-    // Logica per mostrare il pannello del menu
-    console.log("Entrato in showFeedPanel()");
+function resetFeedPanelState() {
+    if (feedPanelState.observer) {
+        feedPanelState.observer.disconnect();
+    }
 
+    if (feedPanelState.sentinel && feedPanelState.sentinel.parentNode) {
+        feedPanelState.sentinel.parentNode.removeChild(feedPanelState.sentinel);
+    }
+
+    feedPanelState.sortedData = [];
+    feedPanelState.renderedCount = 0;
+    feedPanelState.observer = null;
+    feedPanelState.sentinel = null;
+    feedPanelState.isAppending = false;
+}
+
+function openFeedPanelFromGridIndex(startIndex) {
+    showFeedPanel(startIndex);
+}
+
+async function getSortedFeedDataSource() {
+    if (Array.isArray(gridFeedState.sortedData) && gridFeedState.sortedData.length > 0) {
+        return gridFeedState.sortedData.slice();
+    }
+
+    const data = await loadFeed();
+    return data.slice().sort(function(a, b) {
+        return new Date(b.created).getTime() - new Date(a.created).getTime();
+    });
+}
+
+function createFeedMediaMarkup(item) {
+    if (item && item.mimeType && item.mimeType.startsWith('video/')) {
+        return `<video src="${item.src}" controls playsinline preload="metadata"></video>`;
+    }
+
+    return `<img src="${item.src}" alt="Post matrimonio" loading="lazy" />`;
+}
+
+async function createFeedPostMarkup(item, absoluteIndex) {
+    const safeCaption = escapeText(item && item.caption ? item.caption : 'Ospite');
+    const mediaMarkup = createFeedMediaMarkup(item);
+
+    let likesCount = 0;
+    let commentsCount = 0;
+
+    try {
+        const counts = await Promise.all([
+            getMediaLikesCount(item.id),
+            getMediaCommentsCount(item.id)
+        ]);
+
+        likesCount = Number.isFinite(Number(counts[0])) ? Number(counts[0]) : 0;
+        commentsCount = Number.isFinite(Number(counts[1])) ? Number(counts[1]) : 0;
+    } catch (error) {
+        console.warn('Impossibile caricare like/commenti per il media:', item && item.id, error);
+    }
+
+    return `
+        <article class="feed-post" data-media-id="${escapeText(item && item.id ? item.id : '')}" data-feed-index="${absoluteIndex}">
+            <header class="feed-post-header">
+                <img class="feed-post-avatar" src="img/profilo.jpg" alt="Profilo" loading="lazy" />
+                <span class="feed-post-user">${safeCaption}</span>
+            </header>
+            <div class="feed-post-media">${mediaMarkup}</div>
+            <footer class="feed-post-meta">
+                <span class="feed-post-stat"><i class="fa fa-heart" aria-hidden="true"></i><span>${likesCount}</span></span>
+                <span class="feed-post-stat"><i class="fa fa-commenting" aria-hidden="true"></i><span>${commentsCount}</span></span>
+            </footer>
+        </article>
+    `;
+}
+
+async function appendNextFeedPage(feedList) {
+    if (!feedList || feedPanelState.isAppending) {
+        return;
+    }
+
+    const totalItems = feedPanelState.sortedData.length;
+    if (feedPanelState.renderedCount >= totalItems) {
+        if (feedPanelState.observer) {
+            feedPanelState.observer.disconnect();
+            feedPanelState.observer = null;
+        }
+        return;
+    }
+
+    feedPanelState.isAppending = true;
+
+    const start = feedPanelState.renderedCount;
+    const end = Math.min(start + FEED_PAGE_SIZE, totalItems);
+    const itemsChunk = feedPanelState.sortedData.slice(start, end);
+    const postsHtml = await Promise.all(itemsChunk.map(function(item, chunkIndex) {
+        return createFeedPostMarkup(item, start + chunkIndex);
+    }));
+
+    feedList.insertAdjacentHTML('beforeend', postsHtml.join(''));
+    feedPanelState.renderedCount = end;
+
+    if (feedPanelState.renderedCount >= totalItems && feedPanelState.observer) {
+        feedPanelState.observer.disconnect();
+        feedPanelState.observer = null;
+    }
+
+    feedPanelState.isAppending = false;
+}
+
+function scrollToFeedIndex(feedList, targetIndex) {
+    if (!feedList || !Number.isInteger(targetIndex) || targetIndex < 0) {
+        return;
+    }
+
+    const targetPost = feedList.querySelector(`[data-feed-index="${targetIndex}"]`);
+    if (!targetPost) {
+        return;
+    }
+
+    targetPost.scrollIntoView({ block: 'start', behavior: 'auto' });
+}
+
+function detachFeedInfiniteScroll() {
+    if (feedPanelState.observer) {
+        feedPanelState.observer.disconnect();
+        feedPanelState.observer = null;
+    }
+
+    if (feedPanelState.sentinel && feedPanelState.sentinel.parentNode) {
+        feedPanelState.sentinel.parentNode.removeChild(feedPanelState.sentinel);
+    }
+
+    feedPanelState.sentinel = null;
+}
+
+function setupFeedInfiniteScroll(feedList) {
+    const totalItems = feedPanelState.sortedData.length;
+    if (!feedList || totalItems <= FEED_PAGE_SIZE) {
+        return;
+    }
+
+    detachFeedInfiniteScroll();
+
+    const sentinelParent = feedList.parentElement || feedList;
+    const sentinel = document.createElement('div');
+    sentinel.id = 'feed-post-sentinel';
+    sentinel.setAttribute('aria-hidden', 'true');
+    sentinel.style.width = '100%';
+    sentinel.style.height = '1px';
+    sentinel.style.margin = '0';
+    sentinel.style.opacity = '0';
+    sentinel.style.pointerEvents = 'none';
+    sentinelParent.appendChild(sentinel);
+
+    feedPanelState.sentinel = sentinel;
+    feedPanelState.observer = new IntersectionObserver(function(entries) {
+        if (entries[0] && entries[0].isIntersecting) {
+            appendNextFeedPage(feedList);
+        }
+    }, {
+        root: null,
+        rootMargin: '240px 0px',
+        threshold: 0.01
+    });
+
+    feedPanelState.observer.observe(sentinel);
+}
+
+async function showFeedPanel(startIndex) {
     hideAllPanels();
-
     sessionStorage.setItem('lastActivePanel', 'feed');
-    document.getElementById('feed-screen').style.display = 'block';
+
+    const feedScreen = document.getElementById('feed-screen');
+    const feedList = document.getElementById('feed-post-list');
+    if (!feedScreen || !feedList) {
+        return;
+    }
+
+    feedScreen.style.display = 'block';
+    resetFeedPanelState();
+    feedList.innerHTML = "<div class='feed-loading'><span class='loading-spinner' aria-label='Caricamento feed'></span></div>";
+
+    try {
+        const sortedData = await getSortedFeedDataSource();
+        if (!Array.isArray(sortedData) || sortedData.length === 0) {
+            feedList.innerHTML = "<p class='feed-empty'>Nessun elemento presente nella galleria.</p>";
+            return;
+        }
+
+        feedPanelState.sortedData = sortedData;
+        feedList.innerHTML = '';
+
+        const normalizedStartIndex = Number.isInteger(startIndex) && startIndex >= 0 && startIndex < sortedData.length
+            ? startIndex
+            : 0;
+
+        const requiredItems = Math.max(
+            FEED_PAGE_SIZE,
+            Math.min(
+                sortedData.length,
+                (Math.floor(normalizedStartIndex / FEED_PAGE_SIZE) + 1) * FEED_PAGE_SIZE
+            )
+        );
+
+        while (feedPanelState.renderedCount < requiredItems) {
+            await appendNextFeedPage(feedList);
+        }
+
+        scrollToFeedIndex(feedList, normalizedStartIndex);
+        setupFeedInfiniteScroll(feedList);
+    } catch (error) {
+        console.error('Errore in showFeedPanel:', error && error.message ? error.message : error);
+        feedList.innerHTML = "<p class='feed-empty'>Impossibile caricare il feed.</p>";
+        showMessage(error && error.message ? error.message : 'Impossibile caricare il feed.');
+    }
 }
 
 function showUploadPanel() {
@@ -745,6 +1001,10 @@ function showUploadPanel() {
 }
 
 function hideAllPanels() {
+
+    // Evita accumulo observer/sentinel al cambio pannello.
+    detachGridInfiniteScroll();
+    detachFeedInfiniteScroll();
 
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('grid-screen').style.display = 'none';
@@ -778,7 +1038,19 @@ function showSelectedFiles() {
     }
 
     const newFiles = Array.from(fileInput.files);
-    const mergedFiles = selectedFiles.concat(newFiles);
+    const oversizedFiles = newFiles.filter(function(file) {
+        return file && file.size > MAX_FILE_SIZE_BYTES;
+    });
+
+    const validNewFiles = newFiles.filter(function(file) {
+        return file && file.size <= MAX_FILE_SIZE_BYTES;
+    });
+
+    if (oversizedFiles.length > 0) {
+        showMessage("Uno o piu file superano la dimensione massima di 10 MB.");
+    }
+
+    const mergedFiles = selectedFiles.concat(validNewFiles);
 
     if (mergedFiles.length > MAX_SELECTED_FILES) {
         showMessage("Puoi selezionare al massimo 4 file alla volta.");
@@ -786,6 +1058,10 @@ function showSelectedFiles() {
 
     selectedFiles = mergedFiles.slice(0, MAX_SELECTED_FILES);
     fileInput.value = '';
+
+    if (selectedFiles.length === 0) {
+        return;
+    }
 
     showUploadPanel();
 
@@ -833,6 +1109,15 @@ function renderSelectedFilesGrid() {
 async function handleUploadSelectedFiles() {
     if (!Array.isArray(selectedFiles) || selectedFiles.length === 0) {
         showMessage("Nessun file selezionato. Aggiungi almeno un file.");
+        return;
+    }
+
+    const oversizedFiles = selectedFiles.filter(function(file) {
+        return file && file.size > MAX_FILE_SIZE_BYTES;
+    });
+
+    if (oversizedFiles.length > 0) {
+        showMessage("Uno o piu file superano la dimensione massima di 10 MB.");
         return;
     }
 
