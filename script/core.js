@@ -418,22 +418,18 @@ function handleLoginSubmit() {
         showMessage("Inserisci un nome valido per procedere.");
         return;
     }
-
     nameInput.classList.remove('is-error');
 
-    // Verifica se l'username è cambiato rispetto a quello salvato in localStorage
-    const previousUserName = localStorage.getItem('userName');
-    if (previousUserName && previousUserName !== userName) {
-        // Se l'username è cambiato, rimuovi il token precedente
-        localStorage.removeItem('userToken');
-    }
-    localStorage.setItem('userName', userName);
+    // Se l'username è lo stesso di quello salvato, procede direttamente con il login
+    const savedUserName = localStorage.getItem('userName');
 
-    let token = localStorage.getItem('userToken');
-    if (!token) {
-        token = generateToken(userName);
-        localStorage.setItem('userToken', token);
+    if (savedUserName && savedUserName.toLowerCase() === userName.toLowerCase()) {
+        showGridPanel();
+        return;
     }
+
+    // Se l'username è diverso da quello salvato o non esiste, genera un nuovo token e salva entrambi
+    const token = generateToken(userName);
 
     setLoginLoading(true);
     submitButton.disabled = true;
@@ -441,8 +437,11 @@ function handleLoginSubmit() {
     login(userName, token)
         .finally(function() {
             setLoginLoading(false);
+            localStorage.setItem('userName', userName.trim());
+            localStorage.setItem('userToken', token);
             submitButton.disabled = false;
         });
+
 }
 
 function handleLoginNameKeydown(event) {
@@ -500,7 +499,7 @@ function hideMessage() {
 function generateToken(userName) {
     const timestamp = Date.now();
     const randomNum = Math.floor(Math.random() * 1000000);
-    return `${userName}-${timestamp}-${randomNum}`;
+    return `${userName.toLowerCase()}-${timestamp}-${randomNum}`;
 }
 
 async function showGridPanel() {
@@ -765,8 +764,6 @@ function login(username, token) {
         .catch((error) => {
             console.error("Errore durante il login:", error.message);
             showMessage("Errore durante il login: " + error.message);
-            localStorage.removeItem('userName');
-            localStorage.removeItem('userToken');
             showLoginPanel();
         });
 
@@ -816,7 +813,7 @@ function renderSelectedFilesGrid() {
     counter.textContent = `${selectedFiles.length} / ${MAX_SELECTED_FILES} file selezionati`;
 
     if (selectedFiles.length === 0) {
-        grid.innerHTML = '<div class="upload-empty">Nessun file selezionato. Tocca "Aggiungi" per scegliere foto o video.</div>';
+        grid.innerHTML = '<div class="upload-empty">Tocca "Aggiungi" per scegliere foto o video.</div>';
         return;
     }
 

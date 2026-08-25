@@ -1,5 +1,5 @@
  // INCOLLA QUI L'URL DELL'APPLICAZIONE WEB DI GOOGLE APPS SCRIPT
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw_v-alYV3sdypbDgGIIA0DRNtgKj4aLXaAcX9bsdJLccIq2cTjk7cJonzXhvHiKmKq/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyyB0Jdr7KbBPgYwQiA4ta020vx2t0g7kUQ53CHUGwoBUQ-rz-EVv9dNk4nxVSglbvJ/exec";
 
 
 // 1. Funzione per caricare le immagini/video da Google Drive

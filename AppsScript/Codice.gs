@@ -61,13 +61,13 @@ function checkUserName(e) {
       const user = data[i][0];
       const token = data[i][1];
     
-      if (request.user === user && request.token === token) {
+      if (request.user.toLowerCase() === user.toLowerCase() && request.token === token) {
         
         return ContentService.createTextOutput(JSON.stringify({
           status: "success"
         })).setMimeType(ContentService.MimeType.TEXT); // NOTA: MimeType TEXT evita il blocco CORS pre-flight
       
-      } else if (request.user === user && request.token !== token) {
+      } else if (request.user.toLowerCase() === user.toLowerCase() && request.token !== token) {
         
         return ContentService.createTextOutput(JSON.stringify({
           status: "error",
@@ -76,8 +76,9 @@ function checkUserName(e) {
       }
     }
 
-    // Inserisce una nuova riga in fondo al foglio
-    sheet.appendRow([ escapeHtml(request.user.trim()), request.token]);
+    // Inserisce una nuova riga in fondo al foglio con data/ora formattata (gg/mm/aaaa hh:mm:ss)
+    const savedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
+    sheet.appendRow([ escapeHtml(request.user.trim()), request.token, savedAt ]);
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success"
