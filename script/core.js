@@ -634,6 +634,41 @@ function escapeText(value) {
         .replace(/'/g, '&#39;');
 }
 
+function formatFeedCreatedAt(createdValue) {
+    const createdDate = new Date(createdValue);
+    if (Number.isNaN(createdDate.getTime())) {
+        return '';
+    }
+
+    const italyDateFormatter = new Intl.DateTimeFormat('it-IT', {
+        timeZone: 'Europe/Rome',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+
+    const createdItalyDate = italyDateFormatter.format(createdDate);
+    const todayItalyDate = italyDateFormatter.format(new Date());
+    const isToday = createdItalyDate === todayItalyDate;
+
+    if (isToday) {
+        return createdDate.toLocaleTimeString('it-IT', {
+            timeZone: 'Europe/Rome',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    return createdDate.toLocaleString('it-IT', {
+        timeZone: 'Europe/Rome',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
 // Placeholder: implementa qui la logica reale di conteggio like.
 async function getMediaLikesCount(mediaId) {
     return 0;
@@ -820,6 +855,10 @@ function createFeedMediaMarkup(item) {
 async function createFeedPostMarkup(item, absoluteIndex) {
     const safeCaption = escapeText(item && item.caption ? item.caption : 'Ospite');
     const mediaMarkup = createFeedMediaMarkup(item);
+    const createdAtLabel = formatFeedCreatedAt(item && item.created ? item.created : null);
+    const createdAtMarkup = createdAtLabel
+        ? `<div class="feed-post-date">${escapeText(createdAtLabel)}</div>`
+        : '';
 
     let likesCount = 0;
     let commentsCount = 0;
@@ -844,9 +883,10 @@ async function createFeedPostMarkup(item, absoluteIndex) {
             </header>
             <div class="feed-post-media">${mediaMarkup}</div>
             <footer class="feed-post-meta">
-                <span class="feed-post-stat"><i class="fa fa-heart" aria-hidden="true"></i><span>${likesCount}</span></span>
-                <span class="feed-post-stat"><i class="fa fa-commenting" aria-hidden="true"></i><span>${commentsCount}</span></span>
+                <span class="feed-post-stat"><i class="fa fa-heart-o" aria-hidden="true"></i><span>${likesCount}</span></span>
+                <span class="feed-post-stat"><i class="fa fa-comment-o" aria-hidden="true"></i><span>${commentsCount}</span></span>
             </footer>
+            ${createdAtMarkup}
         </article>
     `;
 }

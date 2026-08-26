@@ -634,7 +634,7 @@
 	align-items: center;
 	gap: 10px;
 	padding: 10px 12px;
-	background: rgba(255, 255, 255, 0.96);
+	background: #000;
 	backdrop-filter: blur(6px);
 	border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
@@ -661,7 +661,7 @@
 	font-weight: 700;
 	letter-spacing: 0.6px;
 	text-transform: uppercase;
-	color: #262626;
+	color: #fff;
 }
 
 .feed-post-list {
@@ -724,9 +724,19 @@
 	align-items: center;
 	gap: 18px;
 	padding: 10px 12px 12px;
-	color: #262626;
-	font-size: 0.92rem;
+	color: #000;
+	font-size: 1.0rem;
 	font-weight: 600;
+}
+
+.feed-post-date {
+	padding: 0 12px 12px;
+	font-family: 'Montserrat Local', 'Segoe UI', Arial, sans-serif;
+	font-size: 0.78rem;
+	font-weight: 600;
+	letter-spacing: 0.25px;
+	color: #8a8a8a;
+	text-transform: lowercase;
 }
 
 .feed-post-stat {
