@@ -275,7 +275,10 @@ function tryRestoreGridPanelFromSession(feedContainer) {
     feedContainer.innerHTML = '';
     appendNextGridPage(feedContainer);
     setupGridInfiniteScroll(feedContainer);
-    initializeSlideshow(gridFeedState.sortedData);
+    setTimeout(function() {
+        initializeSlideshow(gridFeedState.sortedData);
+        saveAppStatesToSession();
+    }, 0);
     saveAppStatesToSession();
     return true;
 }
@@ -555,15 +558,20 @@ async function showGridPanel() {
             return new Date(b.created).getTime() - new Date(a.created).getTime();
         });
 
-        initializeSlideshow(sortedData);
-        document.getElementById('slideshow-image').style.display = "block"; // Nasconde l'immagine dello slideshow durante l'aggiornamento
-
         gridFeedState.sortedData = sortedData;
         feedContainer.innerHTML = '';
 
         appendNextGridPage(feedContainer);
         setupGridInfiniteScroll(feedContainer);
         saveAppStatesToSession();
+
+        // Differito: la grid ha già sottomesso la richiesta per image[0] via stagger 0ms,
+        // quindi il slideshow trova la stessa URL già in volo/cache invece di aprire una connessione nuova.
+        setTimeout(function() {
+            initializeSlideshow(sortedData);
+            document.getElementById('slideshow-image').style.display = "block";
+            saveAppStatesToSession();
+        }, 0);
         
     } catch (error) {
         console.error('Errore in showGridPanel: ', error.message);
@@ -721,7 +729,7 @@ function initializeSlideshow(sortedData) {
 
 function createGalleryItemMarkup(item, index) {
     if (item.mimeType && item.mimeType.startsWith('video/')) {
-        return `<div class="gallery-item" role="button" tabindex="0" onclick="openFeedPanelFromGridIndex(${index})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeedPanelFromGridIndex(${index});}"><video src="${item.src}" controls playsinline preload="metadata"></video></div>`;
+        return `<div class="gallery-item" role="button" tabindex="0" onclick="openFeedPanelFromGridIndex(${index})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeedPanelFromGridIndex(${index});}"><video src="${item.src}" controls playsinline preload="none"></video></div>`;
     }
 
     return `<div class="gallery-item" role="button" tabindex="0" onclick="openFeedPanelFromGridIndex(${index})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeedPanelFromGridIndex(${index});}"><img src="${item.src}" alt="Foto matrimonio" loading="lazy" /></div>`;
@@ -754,7 +762,18 @@ function appendNextGridPage(feedContainer) {
             return createGalleryItemMarkup(item, start + chunkIndex);
         })
         .join('');
+
+    // Inserisce prima il markup senza src per evitare il burst di richieste concorrenti
     feedContainer.insertAdjacentHTML('beforeend', chunkHtml);
+
+    // Stagger: assegna i src con piccolo ritardo per ridurre richieste simultanee a Drive
+    const newItems = feedContainer.querySelectorAll('.gallery-item:not([data-src-loaded]) img[src]');
+    newItems.forEach(function(img, i) {
+        const src = img.getAttribute('src');
+        img.removeAttribute('src');
+        img.closest('.gallery-item').setAttribute('data-src-loaded', '1');
+        setTimeout(function() { img.src = src; }, i * 80);
+    });
     gridFeedState.renderedCount = end;
     saveGridFeedStateToSession();
 
@@ -846,7 +865,7 @@ async function getSortedFeedDataSource() {
 
 function createFeedMediaMarkup(item) {
     if (item && item.mimeType && item.mimeType.startsWith('video/')) {
-        return `<video src="${item.src}" controls playsinline preload="metadata"></video>`;
+        return `<video src="${item.src}" controls playsinline preload="none"></video>`;
     }
 
     return `<img src="${item.src}" alt="Post matrimonio" loading="lazy" />`;
@@ -935,7 +954,19 @@ function scrollToFeedIndex(feedList, targetIndex) {
         return;
     }
 
-    targetPost.scrollIntoView({ block: 'start', behavior: 'auto' });
+    const feedScreen = document.getElementById('feed-screen');
+    if (!feedScreen) {
+        targetPost.scrollIntoView({ block: 'start', behavior: 'auto' });
+        return;
+    }
+
+    // Scroll il container reale (non il window) per compatibilità mobile
+    const headerEl = feedScreen.querySelector('.feed-header');
+    const headerHeight = headerEl ? headerEl.offsetHeight : 0;
+    const postTop = targetPost.getBoundingClientRect().top
+        - feedScreen.getBoundingClientRect().top
+        + feedScreen.scrollTop;
+    feedScreen.scrollTop = postTop - headerHeight;
 }
 
 function detachFeedInfiniteScroll() {
@@ -976,7 +1007,7 @@ function setupFeedInfiniteScroll(feedList) {
             appendNextFeedPage(feedList);
         }
     }, {
-        root: null,
+        root: document.getElementById('feed-screen'), // scroll container reale
         rootMargin: '240px 0px',
         threshold: 0.01
     });

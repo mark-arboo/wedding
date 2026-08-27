@@ -74,23 +74,34 @@ self.addEventListener('fetch', (event) => {
           return cachedResponse;
         }
 
-        // Se non è in cache, la scarichiamo dalla rete
-        try {
-          const networkResponse = await fetch(request);
+        // Se non è in cache, la scarichiamo dalla rete con retry su 429
+        const MAX_RETRIES = 3;
+        const BASE_DELAY_MS = 800;
 
-          // Verifichiamo che la risposta sia valida prima di salvarla
-          if (networkResponse && (networkResponse.ok || networkResponse.type === 'opaque')) {
-            // Nota: cloniamo la risposta perché il body di una Response può essere letto una sola volta
-            await cache.put(request.url, networkResponse.clone());
-            swLog('Immagine salvata in cache:', request.url);
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+          try {
+            const networkResponse = await fetch(request.url);
+
+            if (networkResponse.status === 429 && attempt < MAX_RETRIES - 1) {
+              const delay = BASE_DELAY_MS * (attempt + 1) + Math.random() * 400;
+              swWarn(`Limite richieste (429). Retry ${attempt + 1}/${MAX_RETRIES - 1} tra ${Math.round(delay)}ms:`, request.url);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+
+            if (networkResponse.ok || networkResponse.type === 'opaque') {
+              await cache.put(request.url, networkResponse.clone());
+              swLog('Immagine salvata in cache:', request.url);
+            }
+
+            return networkResponse;
+          } catch (error) {
+            if (attempt < MAX_RETRIES - 1) continue;
+            swError('Download immagine fallito (offline e non in cache):', error);
           }
-
-          return networkResponse;
-        } catch (error) {
-          swError('Download immagine fallito (offline e non in cache):', error);
-          // Opzionale: puoi restituire un'immagine di fallback / placeholder locale
-          return cache.match('/img/no-image.jpg');
         }
+
+        return (await cache.match('/img/no-image.jpg')) || Response.error();
       })
     );
   }
