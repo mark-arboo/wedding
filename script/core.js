@@ -24,8 +24,6 @@ const feedPanelState = {
     isAppending: false
 };
 
-let feedAlignTimeoutId = null;
-
 const GRID_FEED_STATE_KEY = 'gridFeedState';
 const SLIDESHOW_STATE_KEY = 'slideshowState';
 const MAX_SELECTED_FILES = 4;
@@ -1021,45 +1019,8 @@ function scrollToFeedMediaId(feedList, targetMediaId) {
 }
 
 function scrollToFeedIndexStable(feedList, targetIndex, targetMediaId) {
-    const feedScreen = document.getElementById('feed-screen');
-
-    if (feedAlignTimeoutId) {
-        window.clearTimeout(feedAlignTimeoutId);
-        feedAlignTimeoutId = null;
-    }
-
-    // Fallback per ambienti senza container dedicato.
-    if (!feedScreen) {
-        scrollToFeedIndex(feedList, targetIndex);
-        return;
-    }
-
-    const hasScrolled = scrollToFeedMediaId(feedList, targetMediaId)
+    scrollToFeedMediaId(feedList, targetMediaId)
         || scrollToFeedIndex(feedList, targetIndex);
-    if (!hasScrolled) {
-        return;
-    }
-
-    // Verifica singola dopo il primo paint: evita il loop di riallineamento che puo generare auto-scroll.
-    feedAlignTimeoutId = window.setTimeout(function() {
-        feedAlignTimeoutId = null;
-
-        const targetPost = findFeedPostByMediaId(feedList, targetMediaId)
-            || feedList.querySelector(`[data-feed-index="${targetIndex}"]`);
-        if (!targetPost) {
-            return;
-        }
-
-        const headerEl = feedScreen.querySelector('.feed-header');
-        const headerHeight = headerEl ? headerEl.offsetHeight : 0;
-        const expectedTop = feedScreen.getBoundingClientRect().top + headerHeight;
-        const delta = Math.abs(targetPost.getBoundingClientRect().top - expectedTop);
-
-        if (delta > 24) {
-            scrollToFeedMediaId(feedList, targetMediaId)
-                || scrollToFeedIndex(feedList, targetIndex);
-        }
-    }, 140);
 }
 
 function detachFeedInfiniteScroll() {
@@ -1176,11 +1137,6 @@ function showUploadPanel() {
 }
 
 function hideAllPanels() {
-
-    if (feedAlignTimeoutId) {
-        window.clearTimeout(feedAlignTimeoutId);
-        feedAlignTimeoutId = null;
-    }
 
     // Evita accumulo observer/sentinel al cambio pannello.
     detachGridInfiniteScroll();
