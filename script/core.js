@@ -1031,55 +1031,10 @@ function alignFeedTargetPost(feedList, targetIndex, targetMediaId) {
 }
 
 function scrollToFeedIndexStable(feedList, targetIndex, targetMediaId) {
-    // Primo allineamento dopo il render del layout.
+    // Un solo allineamento dopo il render del layout: nessun riallineamento successivo.
     window.requestAnimationFrame(function() {
         window.requestAnimationFrame(function() {
-            const didAlign = alignFeedTargetPost(feedList, targetIndex, targetMediaId);
-            if (!didAlign) {
-                return;
-            }
-
-            const targetPost = getFeedTargetPost(feedList, targetIndex, targetMediaId);
-            if (!targetPost) {
-                return;
-            }
-
-            const mediaElement = targetPost.querySelector('.feed-post-media img, .feed-post-media video');
-            if (!mediaElement) {
-                return;
-            }
-
-            const isImageReady = mediaElement.tagName === 'IMG'
-                && mediaElement.complete
-                && mediaElement.naturalWidth > 0;
-            const isVideoReady = mediaElement.tagName === 'VIDEO'
-                && mediaElement.readyState >= 1;
-
-            if (isImageReady || isVideoReady) {
-                return;
-            }
-
-            let didFinalAlign = false;
-            const finalizeAlign = function() {
-                if (didFinalAlign) {
-                    return;
-                }
-                didFinalAlign = true;
-                window.requestAnimationFrame(function() {
-                    alignFeedTargetPost(feedList, targetIndex, targetMediaId);
-                });
-            };
-
-            if (mediaElement.tagName === 'IMG') {
-                mediaElement.addEventListener('load', finalizeAlign, { once: true });
-                mediaElement.addEventListener('error', finalizeAlign, { once: true });
-            } else {
-                mediaElement.addEventListener('loadedmetadata', finalizeAlign, { once: true });
-                mediaElement.addEventListener('error', finalizeAlign, { once: true });
-            }
-
-            // Fallback: evita attese indefinite su browser con eventi non affidabili.
-            window.setTimeout(finalizeAlign, 700);
+            alignFeedTargetPost(feedList, targetIndex, targetMediaId);
         });
     });
 }
