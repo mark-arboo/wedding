@@ -24,6 +24,8 @@ const feedPanelState = {
     isAppending: false
 };
 
+let detachFeedInfiniteScrollActivation = null;
+
 const GRID_FEED_STATE_KEY = 'gridFeedState';
 const SLIDESHOW_STATE_KEY = 'slideshowState';
 const MAX_SELECTED_FILES = 4;
@@ -1036,6 +1038,55 @@ function detachFeedInfiniteScroll() {
     feedPanelState.sentinel = null;
 }
 
+function detachFeedInfiniteScrollActivationListeners() {
+    if (typeof detachFeedInfiniteScrollActivation === 'function') {
+        detachFeedInfiniteScrollActivation();
+    }
+    detachFeedInfiniteScrollActivation = null;
+}
+
+function setupFeedInfiniteScrollOnUserInteraction(feedScreen, feedList) {
+    const totalItems = feedPanelState.sortedData.length;
+    if (!feedScreen || !feedList || totalItems <= FEED_PAGE_SIZE) {
+        return;
+    }
+
+    detachFeedInfiniteScrollActivationListeners();
+
+    let activated = false;
+    const activate = function() {
+        if (activated) {
+            return;
+        }
+        activated = true;
+        detachFeedInfiniteScrollActivationListeners();
+        setupFeedInfiniteScroll(feedList);
+    };
+
+    const touchHandler = function() {
+        activate();
+    };
+    const wheelHandler = function() {
+        activate();
+    };
+    const keyHandler = function(event) {
+        const key = event && event.key ? event.key : '';
+        if (key === 'ArrowDown' || key === 'PageDown' || key === ' ' || key === 'End') {
+            activate();
+        }
+    };
+
+    feedScreen.addEventListener('touchstart', touchHandler, { passive: true });
+    feedScreen.addEventListener('wheel', wheelHandler, { passive: true });
+    feedScreen.addEventListener('keydown', keyHandler);
+
+    detachFeedInfiniteScrollActivation = function() {
+        feedScreen.removeEventListener('touchstart', touchHandler);
+        feedScreen.removeEventListener('wheel', wheelHandler);
+        feedScreen.removeEventListener('keydown', keyHandler);
+    };
+}
+
 function setupFeedInfiniteScroll(feedList) {
     const totalItems = feedPanelState.sortedData.length;
     if (!feedList || totalItems <= FEED_PAGE_SIZE) {
@@ -1121,7 +1172,7 @@ async function showFeedPanel(startIndex, startMediaId) {
         }
 
         scrollToFeedIndexStable(feedList, normalizedStartIndex, requestedMediaId);
-        setupFeedInfiniteScroll(feedList);
+        setupFeedInfiniteScrollOnUserInteraction(feedScreen, feedList);
     } catch (error) {
         console.error('Errore in showFeedPanel:', error && error.message ? error.message : error);
         feedList.innerHTML = "<p class='feed-empty'>Impossibile caricare il feed.</p>";
@@ -1137,6 +1188,8 @@ function showUploadPanel() {
 }
 
 function hideAllPanels() {
+
+    detachFeedInfiniteScrollActivationListeners();
 
     // Evita accumulo observer/sentinel al cambio pannello.
     detachGridInfiniteScroll();
