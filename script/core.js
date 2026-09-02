@@ -21,7 +21,8 @@ const feedPanelState = {
     renderedCount: 0,
     observer: null,
     sentinel: null,
-    isAppending: false
+    isAppending: false,
+    pendingTargetCount: 0
 };
 
 let detachFeedInfiniteScrollActivation = null;
@@ -527,7 +528,12 @@ async function showGridPanel() {
 
     const feedContainer = document.getElementById('feed');
 
+    // Il feed viene mantenuto sincronizzato con la grid.
+    resetFeedPanelState();
+
     if (tryRestoreGridPanelFromSession(feedContainer)) {
+        syncFeedDataWithGridData(gridFeedState.sortedData);
+        ensureFeedRenderedCount(Math.max(FEED_PAGE_SIZE, gridFeedState.renderedCount));
         sessionStorage.setItem('lastActivePanel', 'grid');
         console.log("Grid panel restored from sessionStorage.");
         return;
@@ -561,6 +567,7 @@ async function showGridPanel() {
         });
 
         gridFeedState.sortedData = sortedData;
+        syncFeedDataWithGridData(sortedData);
         feedContainer.innerHTML = '';
 
         appendNextGridPage(feedContainer);
@@ -785,6 +792,7 @@ function appendNextGridPage(feedContainer) {
         setTimeout(function() { img.src = src; }, i * 80);
     });
     gridFeedState.renderedCount = end;
+    ensureFeedRenderedCount(end);
     saveGridFeedStateToSession();
 
     if (gridFeedState.renderedCount >= totalItems && gridFeedState.observer) {
@@ -856,6 +864,12 @@ function resetFeedPanelState() {
     feedPanelState.observer = null;
     feedPanelState.sentinel = null;
     feedPanelState.isAppending = false;
+    feedPanelState.pendingTargetCount = 0;
+
+    const feedList = document.getElementById('feed-post-list');
+    if (feedList) {
+        feedList.innerHTML = '';
+    }
 }
 
 function openFeedPanelFromGridSelection(startIndex, mediaId) {
@@ -871,6 +885,45 @@ async function getSortedFeedDataSource() {
     return data.slice().sort(function(a, b) {
         return new Date(b.created).getTime() - new Date(a.created).getTime();
     });
+}
+
+function syncFeedDataWithGridData(sortedData) {
+    if (!Array.isArray(sortedData)) {
+        feedPanelState.sortedData = [];
+        feedPanelState.pendingTargetCount = 0;
+        return;
+    }
+
+    feedPanelState.sortedData = sortedData.slice();
+    feedPanelState.pendingTargetCount = Math.min(
+        feedPanelState.pendingTargetCount,
+        feedPanelState.sortedData.length
+    );
+}
+
+async function ensureFeedRenderedCount(targetCount) {
+    const feedList = document.getElementById('feed-post-list');
+    const totalItems = feedPanelState.sortedData.length;
+
+    if (!feedList || totalItems === 0) {
+        return;
+    }
+
+    const normalizedTarget = Math.max(0, Math.min(Number(targetCount) || 0, totalItems));
+    feedPanelState.pendingTargetCount = Math.max(feedPanelState.pendingTargetCount, normalizedTarget);
+
+    if (feedPanelState.isAppending) {
+        return;
+    }
+
+    while (feedPanelState.renderedCount < feedPanelState.pendingTargetCount) {
+        await appendNextFeedPage(feedList);
+
+        // Sicurezza anti-loop in caso di append bloccato/non avanzante.
+        if (feedPanelState.renderedCount >= totalItems) {
+            break;
+        }
+    }
 }
 
 function createFeedMediaMarkup(item) {
@@ -936,22 +989,24 @@ async function appendNextFeedPage(feedList) {
 
     feedPanelState.isAppending = true;
 
-    const start = feedPanelState.renderedCount;
-    const end = Math.min(start + FEED_PAGE_SIZE, totalItems);
-    const itemsChunk = feedPanelState.sortedData.slice(start, end);
-    const postsHtml = await Promise.all(itemsChunk.map(function(item, chunkIndex) {
-        return createFeedPostMarkup(item, start + chunkIndex);
-    }));
+    try {
+        const start = feedPanelState.renderedCount;
+        const end = Math.min(start + FEED_PAGE_SIZE, totalItems);
+        const itemsChunk = feedPanelState.sortedData.slice(start, end);
+        const postsHtml = await Promise.all(itemsChunk.map(function(item, chunkIndex) {
+            return createFeedPostMarkup(item, start + chunkIndex);
+        }));
 
-    feedList.insertAdjacentHTML('beforeend', postsHtml.join(''));
-    feedPanelState.renderedCount = end;
+        feedList.insertAdjacentHTML('beforeend', postsHtml.join(''));
+        feedPanelState.renderedCount = end;
 
-    if (feedPanelState.renderedCount >= totalItems && feedPanelState.observer) {
-        feedPanelState.observer.disconnect();
-        feedPanelState.observer = null;
+        if (feedPanelState.renderedCount >= totalItems && feedPanelState.observer) {
+            feedPanelState.observer.disconnect();
+            feedPanelState.observer = null;
+        }
+    } finally {
+        feedPanelState.isAppending = false;
     }
-
-    feedPanelState.isAppending = false;
 }
 
 function scrollToFeedIndex(feedList, targetIndex) {
@@ -1145,18 +1200,25 @@ async function showFeedPanel(startIndex, startMediaId) {
     }
 
     feedScreen.style.display = 'block';
-    resetFeedPanelState();
-    feedList.innerHTML = "<div class='feed-loading'><span class='loading-spinner' aria-label='Caricamento feed'></span></div>";
 
     try {
-        const sortedData = await getSortedFeedDataSource();
+        let sortedData = Array.isArray(feedPanelState.sortedData) && feedPanelState.sortedData.length > 0
+            ? feedPanelState.sortedData
+            : null;
+
+        if (!sortedData) {
+            sortedData = await getSortedFeedDataSource();
+            syncFeedDataWithGridData(sortedData);
+            const firstTargetCount = Math.max(FEED_PAGE_SIZE, gridFeedState.renderedCount || 0);
+            await ensureFeedRenderedCount(firstTargetCount);
+        }
+
         if (!Array.isArray(sortedData) || sortedData.length === 0) {
             feedList.innerHTML = "<p class='feed-empty'>Nessun elemento presente nella galleria.</p>";
             return;
         }
 
-        feedPanelState.sortedData = sortedData;
-        feedList.innerHTML = '';
+        syncFeedDataWithGridData(sortedData);
 
         let normalizedStartIndex = Number.isInteger(startIndex) && startIndex >= 0 && startIndex < sortedData.length
             ? startIndex
@@ -1181,9 +1243,7 @@ async function showFeedPanel(startIndex, startMediaId) {
             )
         );
 
-        while (feedPanelState.renderedCount < requiredItems) {
-            await appendNextFeedPage(feedList);
-        }
+        await ensureFeedRenderedCount(requiredItems);
 
         scrollToFeedIndexStable(feedList, normalizedStartIndex, requestedMediaId);
         setupFeedInfiniteScrollOnUserInteraction(feedScreen, feedList);
