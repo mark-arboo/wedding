@@ -24,6 +24,8 @@ const feedPanelState = {
     isAppending: false
 };
 
+let feedAlignTimeoutId = null;
+
 const GRID_FEED_STATE_KEY = 'gridFeedState';
 const SLIDESHOW_STATE_KEY = 'slideshowState';
 const MAX_SELECTED_FILES = 4;
@@ -1021,23 +1023,26 @@ function scrollToFeedMediaId(feedList, targetMediaId) {
 function scrollToFeedIndexStable(feedList, targetIndex, targetMediaId) {
     const feedScreen = document.getElementById('feed-screen');
 
+    if (feedAlignTimeoutId) {
+        window.clearTimeout(feedAlignTimeoutId);
+        feedAlignTimeoutId = null;
+    }
+
     // Fallback per ambienti senza container dedicato.
     if (!feedScreen) {
         scrollToFeedIndex(feedList, targetIndex);
         return;
     }
 
-    const maxAttempts = 6;
-    let attempts = 0;
+    const hasScrolled = scrollToFeedMediaId(feedList, targetMediaId)
+        || scrollToFeedIndex(feedList, targetIndex);
+    if (!hasScrolled) {
+        return;
+    }
 
-    const tryScroll = function() {
-        attempts += 1;
-
-        const hasScrolled = scrollToFeedMediaId(feedList, targetMediaId)
-            || scrollToFeedIndex(feedList, targetIndex);
-        if (!hasScrolled) {
-            return;
-        }
+    // Verifica singola dopo il primo paint: evita il loop di riallineamento che puo generare auto-scroll.
+    feedAlignTimeoutId = window.setTimeout(function() {
+        feedAlignTimeoutId = null;
 
         const targetPost = findFeedPostByMediaId(feedList, targetMediaId)
             || feedList.querySelector(`[data-feed-index="${targetIndex}"]`);
@@ -1050,16 +1055,11 @@ function scrollToFeedIndexStable(feedList, targetIndex, targetMediaId) {
         const expectedTop = feedScreen.getBoundingClientRect().top + headerHeight;
         const delta = Math.abs(targetPost.getBoundingClientRect().top - expectedTop);
 
-        if (delta <= 3 || attempts >= maxAttempts) {
-            return;
+        if (delta > 24) {
+            scrollToFeedMediaId(feedList, targetMediaId)
+                || scrollToFeedIndex(feedList, targetIndex);
         }
-
-        window.setTimeout(function() {
-            requestAnimationFrame(tryScroll);
-        }, attempts < 3 ? 60 : 140);
-    };
-
-    requestAnimationFrame(tryScroll);
+    }, 140);
 }
 
 function detachFeedInfiniteScroll() {
@@ -1176,6 +1176,11 @@ function showUploadPanel() {
 }
 
 function hideAllPanels() {
+
+    if (feedAlignTimeoutId) {
+        window.clearTimeout(feedAlignTimeoutId);
+        feedAlignTimeoutId = null;
+    }
 
     // Evita accumulo observer/sentinel al cambio pannello.
     detachGridInfiniteScroll();
