@@ -616,6 +616,7 @@
 	background: var(--background);
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
+	overflow-anchor: none;
 }
 
 .feed-layout {
@@ -668,6 +669,7 @@
 	display: grid;
 	gap: 16px;
 	padding: 14px 0 0;
+	overflow-anchor: none;
 }
 
 .feed-post {
