@@ -1019,8 +1019,43 @@ function scrollToFeedMediaId(feedList, targetMediaId) {
 }
 
 function scrollToFeedIndexStable(feedList, targetIndex, targetMediaId) {
-    scrollToFeedMediaId(feedList, targetMediaId)
+    const feedScreen = document.getElementById('feed-screen');
+    if (!feedScreen) {
+        scrollToFeedMediaId(feedList, targetMediaId)
+            || scrollToFeedIndex(feedList, targetIndex);
+        return;
+    }
+
+    const didScroll = scrollToFeedMediaId(feedList, targetMediaId)
         || scrollToFeedIndex(feedList, targetIndex);
+    if (!didScroll) {
+        return;
+    }
+
+    const scrollTopAfterFirstAlign = feedScreen.scrollTop;
+
+    // Singola correzione differita: copre assestamenti layout senza generare auto-scroll continuo.
+    window.setTimeout(function() {
+        if (feedScreen.scrollTop !== scrollTopAfterFirstAlign) {
+            return;
+        }
+
+        const targetPost = findFeedPostByMediaId(feedList, targetMediaId)
+            || feedList.querySelector(`[data-feed-index="${targetIndex}"]`);
+        if (!targetPost) {
+            return;
+        }
+
+        const headerEl = feedScreen.querySelector('.feed-header');
+        const headerHeight = headerEl ? headerEl.offsetHeight : 0;
+        const expectedTop = feedScreen.getBoundingClientRect().top + headerHeight;
+        const delta = Math.abs(targetPost.getBoundingClientRect().top - expectedTop);
+
+        if (delta > 8) {
+            scrollToFeedMediaId(feedList, targetMediaId)
+                || scrollToFeedIndex(feedList, targetIndex);
+        }
+    }, 140);
 }
 
 function detachFeedInfiniteScroll() {
