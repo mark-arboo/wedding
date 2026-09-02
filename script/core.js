@@ -1021,8 +1021,13 @@ function scrollToFeedMediaId(feedList, targetMediaId) {
 }
 
 function scrollToFeedIndexStable(feedList, targetIndex, targetMediaId) {
-    scrollToFeedMediaId(feedList, targetMediaId)
-        || scrollToFeedIndex(feedList, targetIndex);
+    // Allinea una sola volta dopo il render effettivo del layout.
+    window.requestAnimationFrame(function() {
+        window.requestAnimationFrame(function() {
+            scrollToFeedMediaId(feedList, targetMediaId)
+                || scrollToFeedIndex(feedList, targetIndex);
+        });
+    });
 }
 
 function detachFeedInfiniteScroll() {
