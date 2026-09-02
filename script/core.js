@@ -642,6 +642,12 @@ function escapeText(value) {
         .replace(/'/g, '&#39;');
 }
 
+function escapeJsSingleQuotedValue(value) {
+    return String(value || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'");
+}
+
 function formatFeedCreatedAt(createdValue) {
     const createdDate = new Date(createdValue);
     if (Number.isNaN(createdDate.getTime())) {
@@ -728,11 +734,13 @@ function initializeSlideshow(sortedData) {
 }
 
 function createGalleryItemMarkup(item, index) {
+    const safeMediaId = escapeJsSingleQuotedValue(item && item.id ? item.id : '');
+
     if (item.mimeType && item.mimeType.startsWith('video/')) {
-        return `<div class="gallery-item" role="button" tabindex="0" onclick="openFeedPanelFromGridIndex(${index})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeedPanelFromGridIndex(${index});}"><video src="${item.src}" controls playsinline preload="none"></video></div>`;
+        return `<div class="gallery-item" role="button" tabindex="0" onclick="openFeedPanelFromGridSelection(${index}, '${safeMediaId}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeedPanelFromGridSelection(${index}, '${safeMediaId}');}"><video src="${item.src}" controls playsinline preload="none"></video></div>`;
     }
 
-    return `<div class="gallery-item" role="button" tabindex="0" onclick="openFeedPanelFromGridIndex(${index})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeedPanelFromGridIndex(${index});}"><img src="${item.src}" alt="Foto matrimonio" loading="lazy" /></div>`;
+    return `<div class="gallery-item" role="button" tabindex="0" onclick="openFeedPanelFromGridSelection(${index}, '${safeMediaId}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeedPanelFromGridSelection(${index}, '${safeMediaId}');}"><img src="${item.src}" alt="Foto matrimonio" loading="lazy" /></div>`;
 }
 
 function appendNextGridPage(feedContainer) {
@@ -848,8 +856,8 @@ function resetFeedPanelState() {
     feedPanelState.isAppending = false;
 }
 
-function openFeedPanelFromGridIndex(startIndex) {
-    showFeedPanel(startIndex);
+function openFeedPanelFromGridSelection(startIndex, mediaId) {
+    showFeedPanel(startIndex, mediaId);
 }
 
 async function getSortedFeedDataSource() {
@@ -946,18 +954,18 @@ async function appendNextFeedPage(feedList) {
 
 function scrollToFeedIndex(feedList, targetIndex) {
     if (!feedList || !Number.isInteger(targetIndex) || targetIndex < 0) {
-        return;
+        return false;
     }
 
     const targetPost = feedList.querySelector(`[data-feed-index="${targetIndex}"]`);
     if (!targetPost) {
-        return;
+        return false;
     }
 
     const feedScreen = document.getElementById('feed-screen');
     if (!feedScreen) {
         targetPost.scrollIntoView({ block: 'start', behavior: 'auto' });
-        return;
+        return true;
     }
 
     // Scroll il container reale (non il window) per compatibilità mobile
@@ -967,6 +975,91 @@ function scrollToFeedIndex(feedList, targetIndex) {
         - feedScreen.getBoundingClientRect().top
         + feedScreen.scrollTop;
     feedScreen.scrollTop = postTop - headerHeight;
+
+    return true;
+}
+
+function findFeedPostByMediaId(feedList, targetMediaId) {
+    if (!feedList || !targetMediaId) {
+        return null;
+    }
+
+    const mediaIdString = String(targetMediaId);
+    const posts = feedList.querySelectorAll('[data-media-id]');
+    for (let i = 0; i < posts.length; i += 1) {
+        const currentPost = posts[i];
+        if (currentPost.getAttribute('data-media-id') === mediaIdString) {
+            return currentPost;
+        }
+    }
+
+    return null;
+}
+
+function scrollToFeedMediaId(feedList, targetMediaId) {
+    const targetPost = findFeedPostByMediaId(feedList, targetMediaId);
+    if (!targetPost) {
+        return false;
+    }
+
+    const feedScreen = document.getElementById('feed-screen');
+    if (!feedScreen) {
+        targetPost.scrollIntoView({ block: 'start', behavior: 'auto' });
+        return true;
+    }
+
+    const headerEl = feedScreen.querySelector('.feed-header');
+    const headerHeight = headerEl ? headerEl.offsetHeight : 0;
+    const postTop = targetPost.getBoundingClientRect().top
+        - feedScreen.getBoundingClientRect().top
+        + feedScreen.scrollTop;
+    feedScreen.scrollTop = postTop - headerHeight;
+
+    return true;
+}
+
+function scrollToFeedIndexStable(feedList, targetIndex, targetMediaId) {
+    const feedScreen = document.getElementById('feed-screen');
+
+    // Fallback per ambienti senza container dedicato.
+    if (!feedScreen) {
+        scrollToFeedIndex(feedList, targetIndex);
+        return;
+    }
+
+    const maxAttempts = 6;
+    let attempts = 0;
+
+    const tryScroll = function() {
+        attempts += 1;
+
+        const hasScrolled = scrollToFeedMediaId(feedList, targetMediaId)
+            || scrollToFeedIndex(feedList, targetIndex);
+        if (!hasScrolled) {
+            return;
+        }
+
+        const targetPost = findFeedPostByMediaId(feedList, targetMediaId)
+            || feedList.querySelector(`[data-feed-index="${targetIndex}"]`);
+        if (!targetPost) {
+            return;
+        }
+
+        const headerEl = feedScreen.querySelector('.feed-header');
+        const headerHeight = headerEl ? headerEl.offsetHeight : 0;
+        const expectedTop = feedScreen.getBoundingClientRect().top + headerHeight;
+        const delta = Math.abs(targetPost.getBoundingClientRect().top - expectedTop);
+
+        if (delta <= 3 || attempts >= maxAttempts) {
+            return;
+        }
+
+        window.setTimeout(function() {
+            requestAnimationFrame(tryScroll);
+        }, attempts < 3 ? 60 : 140);
+    };
+
+    requestAnimationFrame(tryScroll);
 }
 
 function detachFeedInfiniteScroll() {
@@ -1015,7 +1108,7 @@ function setupFeedInfiniteScroll(feedList) {
     feedPanelState.observer.observe(sentinel);
 }
 
-async function showFeedPanel(startIndex) {
+async function showFeedPanel(startIndex, startMediaId) {
     hideAllPanels();
     sessionStorage.setItem('lastActivePanel', 'feed');
 
@@ -1039,9 +1132,20 @@ async function showFeedPanel(startIndex) {
         feedPanelState.sortedData = sortedData;
         feedList.innerHTML = '';
 
-        const normalizedStartIndex = Number.isInteger(startIndex) && startIndex >= 0 && startIndex < sortedData.length
+        let normalizedStartIndex = Number.isInteger(startIndex) && startIndex >= 0 && startIndex < sortedData.length
             ? startIndex
             : 0;
+
+        const requestedMediaId = startMediaId || '';
+        if (requestedMediaId) {
+            const mediaIdIndex = sortedData.findIndex(function(item) {
+                return String(item && item.id ? item.id : '') === String(requestedMediaId);
+            });
+
+            if (mediaIdIndex >= 0) {
+                normalizedStartIndex = mediaIdIndex;
+            }
+        }
 
         const requiredItems = Math.max(
             FEED_PAGE_SIZE,
@@ -1055,7 +1159,7 @@ async function showFeedPanel(startIndex) {
             await appendNextFeedPage(feedList);
         }
 
-        scrollToFeedIndex(feedList, normalizedStartIndex);
+        scrollToFeedIndexStable(feedList, normalizedStartIndex, requestedMediaId);
         setupFeedInfiniteScroll(feedList);
     } catch (error) {
         console.error('Errore in showFeedPanel:', error && error.message ? error.message : error);
