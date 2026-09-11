@@ -1,7 +1,6 @@
 const SLIDESHOW_INTERVAL = 5000; // Intervallo di 5 secondi per lo slideshow
 const SLIDESHOW_NUM_IMAGES = 6; // Numero massimo di immagini da mostrare nello slideshow
 const GRID_PAGE_SIZE = 6;
-const FEED_PAGE_SIZE = 4;
 const gridFeedState = {
     sortedData: [],
     renderedCount: 0,
@@ -15,17 +14,6 @@ const slideshowState = {
     imageUrls: [],
     currentIndex: 0
 };
-
-const feedPanelState = {
-    sortedData: [],
-    renderedCount: 0,
-    observer: null,
-    sentinel: null,
-    isAppending: false,
-    pendingTargetCount: 0
-};
-
-let detachFeedInfiniteScrollActivation = null;
 
 const GRID_FEED_STATE_KEY = 'gridFeedState';
 const SLIDESHOW_STATE_KEY = 'slideshowState';
@@ -372,9 +360,9 @@ function onPageRefresh() {
             case 'upload':
                 showUploadPanel();
                 break;
-            case 'feed':
-                showFeedPanel();
-                break;          
+            default:
+                showLoginPanel();
+                break;
         }
     } else {
         showLoginPanel();
@@ -451,10 +439,12 @@ function handleLoginSubmit() {
     submitButton.disabled = true;
 
     login(userName, token)
-        .finally(function() {
-            setLoginLoading(false);
+        .then(function() {
             localStorage.setItem('userName', userName.trim());
             localStorage.setItem('userToken', token);
+        })
+        .finally(function() {
+            setLoginLoading(false);
             submitButton.disabled = false;
         });
 
@@ -528,12 +518,7 @@ async function showGridPanel() {
 
     const feedContainer = document.getElementById('feed');
 
-    // Il feed viene mantenuto sincronizzato con la grid.
-    resetFeedPanelState();
-
     if (tryRestoreGridPanelFromSession(feedContainer)) {
-        syncFeedDataWithGridData(gridFeedState.sortedData);
-        ensureFeedRenderedCount(Math.max(FEED_PAGE_SIZE, gridFeedState.renderedCount));
         sessionStorage.setItem('lastActivePanel', 'grid');
         console.log("Grid panel restored from sessionStorage.");
         return;
@@ -567,7 +552,6 @@ async function showGridPanel() {
         });
 
         gridFeedState.sortedData = sortedData;
-        syncFeedDataWithGridData(sortedData);
         feedContainer.innerHTML = '';
 
         appendNextGridPage(feedContainer);
@@ -642,66 +626,6 @@ function transitionSlideshowImage(nextImageUrl) {
     }, 220);
 }
 
-function escapeText(value) {
-    return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-function escapeJsSingleQuotedValue(value) {
-    return String(value || '')
-        .replace(/\\/g, '\\\\')
-        .replace(/'/g, "\\'");
-}
-
-function formatFeedCreatedAt(createdValue) {
-    const createdDate = new Date(createdValue);
-    if (Number.isNaN(createdDate.getTime())) {
-        return '';
-    }
-
-    const italyDateFormatter = new Intl.DateTimeFormat('it-IT', {
-        timeZone: 'Europe/Rome',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-    });
-
-    const createdItalyDate = italyDateFormatter.format(createdDate);
-    const todayItalyDate = italyDateFormatter.format(new Date());
-    const isToday = createdItalyDate === todayItalyDate;
-
-    if (isToday) {
-        return createdDate.toLocaleTimeString('it-IT', {
-            timeZone: 'Europe/Rome',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    }
-
-    return createdDate.toLocaleString('it-IT', {
-        timeZone: 'Europe/Rome',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-// Placeholder: implementa qui la logica reale di conteggio like.
-async function getMediaLikesCount(mediaId) {
-    return 0;
-}
-
-// Placeholder: implementa qui la logica reale di conteggio commenti.
-async function getMediaCommentsCount(mediaId) {
-    return 0;
-}
-
 function initializeSlideshow(sortedData) {
     resetSlideshow();
 
@@ -742,14 +666,12 @@ function initializeSlideshow(sortedData) {
     }, SLIDESHOW_INTERVAL);
 }
 
-function createGalleryItemMarkup(item, index) {
-    const safeMediaId = escapeJsSingleQuotedValue(item && item.id ? item.id : '');
-
+function createGalleryItemMarkup(item) {
     if (item.mimeType && item.mimeType.startsWith('video/')) {
-        return `<div class="gallery-item" role="button" tabindex="0" onclick="openFeedPanelFromGridSelection(${index}, '${safeMediaId}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeedPanelFromGridSelection(${index}, '${safeMediaId}');}"><video src="${item.src}" controls playsinline preload="none"></video></div>`;
+        return `<div class="gallery-item"><video src="${item.src}" controls playsinline preload="none"></video></div>`;
     }
 
-    return `<div class="gallery-item" role="button" tabindex="0" onclick="openFeedPanelFromGridSelection(${index}, '${safeMediaId}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeedPanelFromGridSelection(${index}, '${safeMediaId}');}"><img src="${item.src}" alt="Foto matrimonio" loading="lazy" /></div>`;
+    return `<div class="gallery-item"><img src="${item.src}" alt="Foto matrimonio" loading="lazy" /></div>`;
 }
 
 function appendNextGridPage(feedContainer) {
@@ -775,8 +697,8 @@ function appendNextGridPage(feedContainer) {
    
     const chunkHtml = gridFeedState.sortedData
         .slice(start, end)
-        .map(function(item, chunkIndex) {
-            return createGalleryItemMarkup(item, start + chunkIndex);
+        .map(function(item) {
+            return createGalleryItemMarkup(item);
         })
         .join('');
 
@@ -792,7 +714,6 @@ function appendNextGridPage(feedContainer) {
         setTimeout(function() { img.src = src; }, i * 80);
     });
     gridFeedState.renderedCount = end;
-    ensureFeedRenderedCount(end);
     saveGridFeedStateToSession();
 
     if (gridFeedState.renderedCount >= totalItems && gridFeedState.observer) {
@@ -849,411 +770,6 @@ function setupGridInfiniteScroll(feedContainer) {
     gridFeedState.observer.observe(sentinel);
 }
 
-
-function resetFeedPanelState() {
-    if (feedPanelState.observer) {
-        feedPanelState.observer.disconnect();
-    }
-
-    if (feedPanelState.sentinel && feedPanelState.sentinel.parentNode) {
-        feedPanelState.sentinel.parentNode.removeChild(feedPanelState.sentinel);
-    }
-
-    feedPanelState.sortedData = [];
-    feedPanelState.renderedCount = 0;
-    feedPanelState.observer = null;
-    feedPanelState.sentinel = null;
-    feedPanelState.isAppending = false;
-    feedPanelState.pendingTargetCount = 0;
-
-    const feedList = document.getElementById('feed-post-list');
-    if (feedList) {
-        feedList.innerHTML = '';
-    }
-}
-
-function openFeedPanelFromGridSelection(startIndex, mediaId) {
-    showFeedPanel(startIndex, mediaId);
-}
-
-async function getSortedFeedDataSource() {
-    if (Array.isArray(gridFeedState.sortedData) && gridFeedState.sortedData.length > 0) {
-        return gridFeedState.sortedData.slice();
-    }
-
-    const data = await loadFeed();
-    return data.slice().sort(function(a, b) {
-        return new Date(b.created).getTime() - new Date(a.created).getTime();
-    });
-}
-
-function syncFeedDataWithGridData(sortedData) {
-    if (!Array.isArray(sortedData)) {
-        feedPanelState.sortedData = [];
-        feedPanelState.pendingTargetCount = 0;
-        return;
-    }
-
-    feedPanelState.sortedData = sortedData.slice();
-    feedPanelState.pendingTargetCount = Math.min(
-        feedPanelState.pendingTargetCount,
-        feedPanelState.sortedData.length
-    );
-}
-
-async function ensureFeedRenderedCount(targetCount) {
-    const feedList = document.getElementById('feed-post-list');
-    const totalItems = feedPanelState.sortedData.length;
-
-    if (!feedList || totalItems === 0) {
-        return;
-    }
-
-    const normalizedTarget = Math.max(0, Math.min(Number(targetCount) || 0, totalItems));
-    feedPanelState.pendingTargetCount = Math.max(feedPanelState.pendingTargetCount, normalizedTarget);
-
-    if (feedPanelState.isAppending) {
-        return;
-    }
-
-    while (feedPanelState.renderedCount < feedPanelState.pendingTargetCount) {
-        await appendNextFeedPage(feedList);
-
-        // Sicurezza anti-loop in caso di append bloccato/non avanzante.
-        if (feedPanelState.renderedCount >= totalItems) {
-            break;
-        }
-    }
-}
-
-function createFeedMediaMarkup(item) {
-    if (item && item.mimeType && item.mimeType.startsWith('video/')) {
-        return `<video src="${item.src}" controls playsinline preload="none"></video>`;
-    }
-
-    return `<img src="${item.src}" alt="Post matrimonio" loading="lazy" />`;
-}
-
-async function createFeedPostMarkup(item, absoluteIndex) {
-    const safeCaption = escapeText(item && item.caption ? item.caption : 'Ospite');
-    const mediaMarkup = createFeedMediaMarkup(item);
-    const createdAtLabel = formatFeedCreatedAt(item && item.created ? item.created : null);
-    const createdAtMarkup = createdAtLabel
-        ? `<div class="feed-post-date">${escapeText(createdAtLabel)}</div>`
-        : '';
-
-    let likesCount = 0;
-    let commentsCount = 0;
-
-    try {
-        const counts = await Promise.all([
-            getMediaLikesCount(item.id),
-            getMediaCommentsCount(item.id)
-        ]);
-
-        likesCount = Number.isFinite(Number(counts[0])) ? Number(counts[0]) : 0;
-        commentsCount = Number.isFinite(Number(counts[1])) ? Number(counts[1]) : 0;
-    } catch (error) {
-        console.warn('Impossibile caricare like/commenti per il media:', item && item.id, error);
-    }
-
-    return `
-        <article class="feed-post" data-media-id="${escapeText(item && item.id ? item.id : '')}" data-feed-index="${absoluteIndex}">
-            <header class="feed-post-header">
-                <img class="feed-post-avatar" src="img/profilo.jpg" alt="Profilo" loading="lazy" />
-                <span class="feed-post-user">${safeCaption}</span>
-            </header>
-            <div class="feed-post-media">${mediaMarkup}</div>
-            <footer class="feed-post-meta">
-                <span class="feed-post-stat"><i class="fa fa-heart-o" aria-hidden="true"></i><span>${likesCount}</span></span>
-                <span class="feed-post-stat"><i class="fa fa-comment-o" aria-hidden="true"></i><span>${commentsCount}</span></span>
-            </footer>
-            ${createdAtMarkup}
-        </article>
-    `;
-}
-
-async function appendNextFeedPage(feedList) {
-    if (!feedList || feedPanelState.isAppending) {
-        return;
-    }
-
-    const totalItems = feedPanelState.sortedData.length;
-    if (feedPanelState.renderedCount >= totalItems) {
-        if (feedPanelState.observer) {
-            feedPanelState.observer.disconnect();
-            feedPanelState.observer = null;
-        }
-        return;
-    }
-
-    feedPanelState.isAppending = true;
-
-    try {
-        const start = feedPanelState.renderedCount;
-        const end = Math.min(start + FEED_PAGE_SIZE, totalItems);
-        const itemsChunk = feedPanelState.sortedData.slice(start, end);
-        const postsHtml = await Promise.all(itemsChunk.map(function(item, chunkIndex) {
-            return createFeedPostMarkup(item, start + chunkIndex);
-        }));
-
-        feedList.insertAdjacentHTML('beforeend', postsHtml.join(''));
-        feedPanelState.renderedCount = end;
-
-        if (feedPanelState.renderedCount >= totalItems && feedPanelState.observer) {
-            feedPanelState.observer.disconnect();
-            feedPanelState.observer = null;
-        }
-    } finally {
-        feedPanelState.isAppending = false;
-    }
-}
-
-function scrollToFeedIndex(feedList, targetIndex) {
-    if (!feedList || !Number.isInteger(targetIndex) || targetIndex < 0) {
-        return false;
-    }
-
-    const targetPost = feedList.querySelector(`[data-feed-index="${targetIndex}"]`);
-    if (!targetPost) {
-        return false;
-    }
-
-    const feedScreen = document.getElementById('feed-screen');
-    if (!feedScreen) {
-        targetPost.scrollIntoView({ block: 'start', behavior: 'auto' });
-        return true;
-    }
-
-    // Scroll il container reale (non il window) per compatibilità mobile
-    const headerEl = feedScreen.querySelector('.feed-header');
-    const headerHeight = headerEl ? headerEl.offsetHeight : 0;
-    const postTop = targetPost.getBoundingClientRect().top
-        - feedScreen.getBoundingClientRect().top
-        + feedScreen.scrollTop;
-    feedScreen.scrollTop = postTop - headerHeight;
-
-    return true;
-}
-
-function findFeedPostByMediaId(feedList, targetMediaId) {
-    if (!feedList || !targetMediaId) {
-        return null;
-    }
-
-    const mediaIdString = String(targetMediaId);
-    const posts = feedList.querySelectorAll('[data-media-id]');
-    for (let i = 0; i < posts.length; i += 1) {
-        const currentPost = posts[i];
-        if (currentPost.getAttribute('data-media-id') === mediaIdString) {
-            return currentPost;
-        }
-    }
-
-    return null;
-}
-
-function scrollToFeedMediaId(feedList, targetMediaId) {
-    const targetPost = findFeedPostByMediaId(feedList, targetMediaId);
-    if (!targetPost) {
-        return false;
-    }
-
-    const feedScreen = document.getElementById('feed-screen');
-    if (!feedScreen) {
-        targetPost.scrollIntoView({ block: 'start', behavior: 'auto' });
-        return true;
-    }
-
-    const headerEl = feedScreen.querySelector('.feed-header');
-    const headerHeight = headerEl ? headerEl.offsetHeight : 0;
-    const postTop = targetPost.getBoundingClientRect().top
-        - feedScreen.getBoundingClientRect().top
-        + feedScreen.scrollTop;
-    feedScreen.scrollTop = postTop - headerHeight;
-
-    return true;
-}
-
-function getFeedTargetPost(feedList, targetIndex, targetMediaId) {
-    return findFeedPostByMediaId(feedList, targetMediaId)
-        || (feedList ? feedList.querySelector(`[data-feed-index="${targetIndex}"]`) : null);
-}
-
-function alignFeedTargetPost(feedList, targetIndex, targetMediaId) {
-    return scrollToFeedMediaId(feedList, targetMediaId)
-        || scrollToFeedIndex(feedList, targetIndex);
-}
-
-function scrollToFeedIndexStable(feedList, targetIndex, targetMediaId) {
-    // Un solo allineamento dopo il render del layout: nessun riallineamento successivo.
-    window.requestAnimationFrame(function() {
-        window.requestAnimationFrame(function() {
-            alignFeedTargetPost(feedList, targetIndex, targetMediaId);
-        });
-    });
-}
-
-function detachFeedInfiniteScroll() {
-    if (feedPanelState.observer) {
-        feedPanelState.observer.disconnect();
-        feedPanelState.observer = null;
-    }
-
-    if (feedPanelState.sentinel && feedPanelState.sentinel.parentNode) {
-        feedPanelState.sentinel.parentNode.removeChild(feedPanelState.sentinel);
-    }
-
-    feedPanelState.sentinel = null;
-}
-
-function detachFeedInfiniteScrollActivationListeners() {
-    if (typeof detachFeedInfiniteScrollActivation === 'function') {
-        detachFeedInfiniteScrollActivation();
-    }
-    detachFeedInfiniteScrollActivation = null;
-}
-
-function setupFeedInfiniteScrollOnUserInteraction(feedScreen, feedList) {
-    const totalItems = feedPanelState.sortedData.length;
-    if (!feedScreen || !feedList || totalItems <= FEED_PAGE_SIZE) {
-        return;
-    }
-
-    detachFeedInfiniteScrollActivationListeners();
-
-    let activated = false;
-    const activate = function() {
-        if (activated) {
-            return;
-        }
-        activated = true;
-        detachFeedInfiniteScrollActivationListeners();
-        setupFeedInfiniteScroll(feedList);
-    };
-
-    const touchHandler = function() {
-        activate();
-    };
-    const wheelHandler = function() {
-        activate();
-    };
-    const keyHandler = function(event) {
-        const key = event && event.key ? event.key : '';
-        if (key === 'ArrowDown' || key === 'PageDown' || key === ' ' || key === 'End') {
-            activate();
-        }
-    };
-
-    feedScreen.addEventListener('touchstart', touchHandler, { passive: true });
-    feedScreen.addEventListener('wheel', wheelHandler, { passive: true });
-    feedScreen.addEventListener('keydown', keyHandler);
-
-    detachFeedInfiniteScrollActivation = function() {
-        feedScreen.removeEventListener('touchstart', touchHandler);
-        feedScreen.removeEventListener('wheel', wheelHandler);
-        feedScreen.removeEventListener('keydown', keyHandler);
-    };
-}
-
-function setupFeedInfiniteScroll(feedList) {
-    const totalItems = feedPanelState.sortedData.length;
-    if (!feedList || totalItems <= FEED_PAGE_SIZE) {
-        return;
-    }
-
-    detachFeedInfiniteScroll();
-
-    const sentinelParent = feedList.parentElement || feedList;
-    const sentinel = document.createElement('div');
-    sentinel.id = 'feed-post-sentinel';
-    sentinel.setAttribute('aria-hidden', 'true');
-    sentinel.style.width = '100%';
-    sentinel.style.height = '1px';
-    sentinel.style.margin = '0';
-    sentinel.style.opacity = '0';
-    sentinel.style.pointerEvents = 'none';
-    sentinelParent.appendChild(sentinel);
-
-    feedPanelState.sentinel = sentinel;
-    feedPanelState.observer = new IntersectionObserver(function(entries) {
-        if (entries[0] && entries[0].isIntersecting) {
-            appendNextFeedPage(feedList);
-        }
-    }, {
-        root: document.getElementById('feed-screen'), // scroll container reale
-        rootMargin: '240px 0px',
-        threshold: 0.01
-    });
-
-    feedPanelState.observer.observe(sentinel);
-}
-
-async function showFeedPanel(startIndex, startMediaId) {
-    hideAllPanels();
-    sessionStorage.setItem('lastActivePanel', 'feed');
-
-    const feedScreen = document.getElementById('feed-screen');
-    const feedList = document.getElementById('feed-post-list');
-    if (!feedScreen || !feedList) {
-        return;
-    }
-
-    feedScreen.style.display = 'block';
-
-    try {
-        let sortedData = Array.isArray(feedPanelState.sortedData) && feedPanelState.sortedData.length > 0
-            ? feedPanelState.sortedData
-            : null;
-
-        if (!sortedData) {
-            sortedData = await getSortedFeedDataSource();
-            syncFeedDataWithGridData(sortedData);
-            const firstTargetCount = Math.max(FEED_PAGE_SIZE, gridFeedState.renderedCount || 0);
-            await ensureFeedRenderedCount(firstTargetCount);
-        }
-
-        if (!Array.isArray(sortedData) || sortedData.length === 0) {
-            feedList.innerHTML = "<p class='feed-empty'>Nessun elemento presente nella galleria.</p>";
-            return;
-        }
-
-        syncFeedDataWithGridData(sortedData);
-
-        let normalizedStartIndex = Number.isInteger(startIndex) && startIndex >= 0 && startIndex < sortedData.length
-            ? startIndex
-            : 0;
-
-        const requestedMediaId = startMediaId || '';
-        if (requestedMediaId) {
-            const mediaIdIndex = sortedData.findIndex(function(item) {
-                return String(item && item.id ? item.id : '') === String(requestedMediaId);
-            });
-
-            if (mediaIdIndex >= 0) {
-                normalizedStartIndex = mediaIdIndex;
-            }
-        }
-
-        const requiredItems = Math.max(
-            FEED_PAGE_SIZE,
-            Math.min(
-                sortedData.length,
-                (Math.floor(normalizedStartIndex / FEED_PAGE_SIZE) + 1) * FEED_PAGE_SIZE
-            )
-        );
-
-        await ensureFeedRenderedCount(requiredItems);
-
-        scrollToFeedIndexStable(feedList, normalizedStartIndex, requestedMediaId);
-        setupFeedInfiniteScrollOnUserInteraction(feedScreen, feedList);
-    } catch (error) {
-        console.error('Errore in showFeedPanel:', error && error.message ? error.message : error);
-        feedList.innerHTML = "<p class='feed-empty'>Impossibile caricare il feed.</p>";
-        showMessage(error && error.message ? error.message : 'Impossibile caricare il feed.');
-    }
-}
-
 function showUploadPanel() {
     hideAllPanels();
     sessionStorage.setItem('lastActivePanel', 'upload');
@@ -1262,17 +778,12 @@ function showUploadPanel() {
 }
 
 function hideAllPanels() {
-
-    detachFeedInfiniteScrollActivationListeners();
-
     // Evita accumulo observer/sentinel al cambio pannello.
     detachGridInfiniteScroll();
-    detachFeedInfiniteScroll();
 
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('grid-screen').style.display = 'none';
     document.getElementById('upload-screen').style.display = 'none';
-    document.getElementById('feed-screen').style.display = 'none';
 }
 
 
@@ -1288,6 +799,7 @@ function login(username, token) {
             console.error("Errore durante il login:", error.message);
             showMessage("Errore durante il login: " + error.message);
             showLoginPanel();
+            throw error;
         });
 
 }

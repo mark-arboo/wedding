@@ -1,6 +1,6 @@
  // INCOLLA QUI L'URL DELL'APPLICAZIONE WEB DI GOOGLE APPS SCRIPT
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyyB0Jdr7KbBPgYwQiA4ta020vx2t0g7kUQ53CHUGwoBUQ-rz-EVv9dNk4nxVSglbvJ/exec";
-
+const API_URL = "http://localhost:8080/wedding-api";
 
 // 1. Funzione per caricare le immagini/video da Google Drive
 async function loadFeed() {
@@ -29,19 +29,21 @@ async function glogin(user, token) {
     }
 
     const payload = {
-      action: "checkUserName",
       user: user,
       token: token
     };
   
-    const response = await fetch(`${APPS_SCRIPT_URL}?action=checkUserName`, {
+    const response = await fetch(`${API_URL}/api/v1/login`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify(payload)
     });
 
     const result = await response.json();
 
-    if (result && result.status === "success") {
+    if (result && result.status === "SUCCESS") {
       return true; // Login riuscito
     } else {
       throw new Error(result.message || "Errore durante il login.");
