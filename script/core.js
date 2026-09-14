@@ -2,7 +2,7 @@ const SLIDESHOW_INTERVAL = 5000; // Intervallo di 5 secondi per lo slideshow
 const SLIDESHOW_NUM_IMAGES = 6; // Numero massimo di immagini da mostrare nello slideshow
 const GRID_PAGE_SIZE = 6;
 const gridFeedState = {
-    sortedData: [],
+    media: [],
     renderedCount: 0,
     observer: null,
     sentinel: null,
@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function getSerializableGridFeedState() {
     return {
-        sortedData: Array.isArray(gridFeedState.sortedData) ? gridFeedState.sortedData : [],
+        media: Array.isArray(gridFeedState.media) ? gridFeedState.media : [],
         renderedCount: Number.isFinite(gridFeedState.renderedCount) ? gridFeedState.renderedCount : 0,
         isAppending: false
     };
@@ -202,7 +202,7 @@ function readAppStatesFromSession() {
         const parsedGridState = JSON.parse(gridRaw);
         const parsedSlideshowState = JSON.parse(slideshowRaw);
 
-        if (!parsedGridState || !Array.isArray(parsedGridState.sortedData)) {
+        if (!parsedGridState || !Array.isArray(parsedGridState.media)) {
             return null;
         }
 
@@ -210,13 +210,13 @@ function readAppStatesFromSession() {
             return null;
         }
 
-        if (parsedGridState.sortedData.length === 0 && parsedSlideshowState.imageUrls.length === 0) {
+        if (parsedGridState.media.length === 0 && parsedSlideshowState.imageUrls.length === 0) {
             return null;
         }
 
         return {
             grid: {
-                sortedData: parsedGridState.sortedData,
+                media: parsedGridState.media,
                 renderedCount: Number.isFinite(parsedGridState.renderedCount) ? parsedGridState.renderedCount : 0,
                 isAppending: false
             },
@@ -236,7 +236,7 @@ function applyStatesFromSession(sessionStates) {
         return false;
     }
 
-    gridFeedState.sortedData = sessionStates.grid.sortedData;
+    gridFeedState.media = sessionStates.grid.media;
     gridFeedState.renderedCount = 0;
     gridFeedState.isAppending = false;
 
@@ -256,7 +256,7 @@ function tryRestoreGridPanelFromSession(feedContainer) {
         return false;
     }
 
-    if (gridFeedState.sortedData.length === 0) {
+    if (gridFeedState.media.length === 0) {
         feedContainer.innerHTML = "<p style='text-align:center;'>Nessun elemento presente nella galleria.</p>";
         initializeSlideshow([]);
         saveAppStatesToSession();
@@ -267,7 +267,7 @@ function tryRestoreGridPanelFromSession(feedContainer) {
     appendNextGridPage(feedContainer);
     setupGridInfiniteScroll(feedContainer);
     setTimeout(function() {
-        initializeSlideshow(gridFeedState.sortedData);
+        initializeSlideshow(gridFeedState.media);
         saveAppStatesToSession();
     }, 0);
     saveAppStatesToSession();
@@ -525,7 +525,7 @@ async function showGridPanel() {
     }
 
     // Logica per mostrare il pannello del menu
-    console.log("Richiesta dati per la galleria a Google Drive...");
+    console.log("Richiesta dati per la galleria al server...");
 
     document.getElementById('slideshow-image').style.display = "none"; // Nasconde l'immagine dello slideshow durante l'aggiornamento
 
@@ -534,7 +534,7 @@ async function showGridPanel() {
     }
 
     try {
-        const data = await loadFeed();
+        const data = await loadImages();
 
         if (data.length === 0) {
           showMessage("Nessun elemento presente nella galleria.")
@@ -547,11 +547,9 @@ async function showGridPanel() {
             return;
         }
 
-        const sortedData = data.slice().sort(function(a, b) {
-            return new Date(b.created).getTime() - new Date(a.created).getTime();
-        });
+        const mediaItems = Array.isArray(data) ? data : [];
 
-        gridFeedState.sortedData = sortedData;
+        gridFeedState.media = mediaItems;
         feedContainer.innerHTML = '';
 
         appendNextGridPage(feedContainer);
@@ -561,7 +559,7 @@ async function showGridPanel() {
         // Differito: la grid ha già sottomesso la richiesta per image[0] via stagger 0ms,
         // quindi il slideshow trova la stessa URL già in volo/cache invece di aprire una connessione nuova.
         setTimeout(function() {
-            initializeSlideshow(sortedData);
+            initializeSlideshow(mediaItems);
             document.getElementById('slideshow-image').style.display = "block";
             saveAppStatesToSession();
         }, 0);
@@ -591,7 +589,7 @@ function resetGridPaginationState() {
         gridFeedState.sentinel.parentNode.removeChild(gridFeedState.sentinel);
     }
 
-    gridFeedState.sortedData = [];
+    gridFeedState.media = [];
     gridFeedState.renderedCount = 0;
     gridFeedState.observer = null;
     gridFeedState.sentinel = null;
@@ -626,6 +624,14 @@ function transitionSlideshowImage(nextImageUrl) {
     }, 220);
 }
 
+function getThumbnailMediaImageUrl(item) {
+    if (!item) {
+        return '';
+    }
+
+    return item.thumbnailUrl || item.src || '';
+}
+
 function initializeSlideshow(sortedData) {
     resetSlideshow();
 
@@ -636,11 +642,12 @@ function initializeSlideshow(sortedData) {
 
     const imageUrls = sortedData
         .filter(function(item) {
-            return item && item.src && item.mimeType && item.mimeType.startsWith('image/');
+            const mediaUrl = getThumbnailMediaImageUrl(item);
+            return item && mediaUrl && item.mimeType && item.mimeType.startsWith('image/');
         })
         .slice(0, SLIDESHOW_NUM_IMAGES) // Prendi solo le prime 6 immagini
         .map(function(item) {
-            return item.src;
+            return getThumbnailMediaImageUrl(item);
         });
 
     if (imageUrls.length === 0) {
@@ -667,11 +674,13 @@ function initializeSlideshow(sortedData) {
 }
 
 function createGalleryItemMarkup(item) {
-    if (item.mimeType && item.mimeType.startsWith('video/')) {
-        return `<div class="gallery-item"><video src="${item.src}" controls playsinline preload="none"></video></div>`;
+    const mediaUrl = getThumbnailMediaImageUrl(item);
+
+    if (item && item.mimeType && item.mimeType.startsWith('video/')) {
+        return `<div class="gallery-item"><video src="${mediaUrl}" controls playsinline preload="none"></video></div>`;
     }
 
-    return `<div class="gallery-item"><img src="${item.src}" alt="Foto matrimonio" loading="lazy" /></div>`;
+    return `<div class="gallery-item"><img src="${mediaUrl}" alt="Foto matrimonio" loading="lazy" /></div>`;
 }
 
 function appendNextGridPage(feedContainer) {
@@ -679,7 +688,7 @@ function appendNextGridPage(feedContainer) {
         return;
     }
 
-    const totalItems = gridFeedState.sortedData.length;
+    const totalItems = gridFeedState.media.length;
     if (gridFeedState.renderedCount >= totalItems) {
         if (gridFeedState.observer) {
             gridFeedState.observer.disconnect();
@@ -695,7 +704,7 @@ function appendNextGridPage(feedContainer) {
 
     console.log(`Caricamento paginato attivato: elementi ${start + 1}-${end} di ${totalItems}`);
    
-    const chunkHtml = gridFeedState.sortedData
+    const chunkHtml = gridFeedState.media
         .slice(start, end)
         .map(function(item) {
             return createGalleryItemMarkup(item);
@@ -705,7 +714,7 @@ function appendNextGridPage(feedContainer) {
     // Inserisce prima il markup senza src per evitare il burst di richieste concorrenti
     feedContainer.insertAdjacentHTML('beforeend', chunkHtml);
 
-    // Stagger: assegna i src con piccolo ritardo per ridurre richieste simultanee a Drive
+    // Stagger: assegna i src con piccolo ritardo per ridurre richieste simultanee al server
     const newItems = feedContainer.querySelectorAll('.gallery-item:not([data-src-loaded]) img[src]');
     newItems.forEach(function(img, i) {
         const src = img.getAttribute('src');
@@ -738,7 +747,7 @@ function detachGridInfiniteScroll() {
 }
 
 function setupGridInfiniteScroll(feedContainer) {
-    const totalItems = gridFeedState.sortedData.length;
+    const totalItems = gridFeedState.media.length;
     if (!feedContainer || totalItems <= GRID_PAGE_SIZE) {
         return;
     }

@@ -2,25 +2,7 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyyB0Jdr7KbBPgYwQiA4ta020vx2t0g7kUQ53CHUGwoBUQ-rz-EVv9dNk4nxVSglbvJ/exec";
 const API_URL = "http://localhost:8080/wedding-api";
 
-// 1. Funzione per caricare le immagini/video da Google Drive
-async function loadFeed() {
-  // const feedContainer = document.getElementById(root);
-  try {
-    const response = await fetch(`${APPS_SCRIPT_URL}?action=getImageList`);
-    const result = await response.json();
-
-    if (result && result.status === "success" && Array.isArray(result.data)) {
-      return result.data;
-    }
-
-    throw new Error("Errore nel caricamento della galleria.");
-   
-  } catch (err) {
-    console.error(err);
-    throw new Error("Impossibile connettersi a Google Drive.");
-  }
-}
-
+// 1. Effettua la login al sistema
 async function glogin(user, token) {
 
     // verifica se username e token sono validi (puoi aggiungere la tua logica di autenticazione qui)
@@ -43,16 +25,35 @@ async function glogin(user, token) {
 
     const result = await response.json();
 
-    if (result && result.status === "SUCCESS") {
+    if (result && result.status === "SUCCESS_STATUS") {
       return true; // Login riuscito
     } else {
       throw new Error(result.message || "Errore durante il login.");
     }
 
-
 }
 
-// 2. Funzione per inviare foto/video a Google Drive
+// 1. Funzione per caricare le immagini/video da Google Drive
+async function loadImages() {
+  // const feedContainer = document.getElementById(root);
+  try {
+    const response = await fetch(`${API_URL}/api/v1/media/images`);
+    const result = await response.json();
+
+    if (result && result.status === "SUCCESS_STATUS" && Array.isArray(result.data)) {
+      return result.data;
+    }
+
+    throw new Error("Errore nel caricamento della galleria.");
+   
+  } catch (err) {
+    console.error(err);
+    throw new Error("Impossibile connettersi al server.");
+  }
+}
+
+
+// 3. Funzione per inviare foto/video a Google Drive
 async function uploadMedia(files, user) {
   if (!Array.isArray(files) || files.length === 0) {
     throw new Error("Nessun file selezionato per il caricamento.");
