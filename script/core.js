@@ -22,6 +22,7 @@ const MAX_SELECTED_FILES = 4;
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const likeCache = {};
 const commentCache = {};
+const commentListCache = {};
 
 let selectedFiles = []; // Array per memorizzare i file selezionati per l'upload
 
@@ -1134,6 +1135,54 @@ function saveCommentCacheToStorage() {
     localStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(commentCache));
 }
 
+function normalizeCommentCacheKey(mediaCode) {
+    return String(mediaCode || '').trim();
+}
+
+function getCachedCommentsByCode(mediaCode) {
+    const key = normalizeCommentCacheKey(mediaCode);
+    if (!key || !Object.prototype.hasOwnProperty.call(commentListCache, key)) {
+        console.debug('[comments cache] miss per codice', key);
+        return null;
+    }
+
+    const cachedValue = commentListCache[key];
+    if (!Array.isArray(cachedValue)) {
+        console.debug('[comments cache] entry non valida, rimuovo chiave', key);
+        delete commentListCache[key];
+        return null;
+    }
+
+    console.debug('[comments cache] hit per codice', key, 'numero commenti:', cachedValue.length);
+    return cachedValue.slice();
+}
+
+function setCachedCommentsByCode(mediaCode, comments) {
+    const key = normalizeCommentCacheKey(mediaCode);
+    if (!key) {
+        return;
+    }
+
+    const normalizedComments = Array.isArray(comments) ? comments.slice() : [];
+    commentListCache[key] = normalizedComments;
+    console.debug('[comments cache] salva in cache per codice', key, 'numero commenti:', normalizedComments.length);
+}
+
+function clearCommentListCacheForCode(mediaCode) {
+    const key = normalizeCommentCacheKey(mediaCode);
+    if (key && Object.prototype.hasOwnProperty.call(commentListCache, key)) {
+        delete commentListCache[key];
+        console.debug('[comments cache] svuota cache per codice', key, 'dopo inserimento nuovo commento');
+    }
+}
+
+function clearCommentListCache() {
+    console.debug('[comments cache] svuota cache completa');
+    Object.keys(commentListCache).forEach(function(key) {
+        delete commentListCache[key];
+    });
+}
+
 function getLikeSummaryFromStorage() {
     try {
         const storedValue = localStorage.getItem(LIKE_SUMMARY_STORAGE_KEY);
@@ -1349,6 +1398,11 @@ function syncCommentSummaryForMedia(mediaItems, summaryList) {
         return;
     }
 
+    const previousSummary = {};
+    Object.keys(commentCache).forEach(function(key) {
+        previousSummary[key] = Number(commentCache[key]) || 0;
+    });
+
     const normalizedSummary = Array.isArray(summaryList) ? summaryList.map(function(item) {
         return {
             codice: String(item && item.codice || ''),
@@ -1361,6 +1415,23 @@ function syncCommentSummaryForMedia(mediaItems, summaryList) {
     const cacheObject = {};
     normalizedSummary.forEach(function(item) {
         cacheObject[item.codice] = item.commentCount;
+    });
+
+    const changedCodes = new Set();
+    Object.keys(cacheObject).forEach(function(key) {
+        const previousCount = Number(previousSummary[key]) || 0;
+        const nextCount = Number(cacheObject[key]) || 0;
+        if (previousCount !== nextCount) {
+            changedCodes.add(key);
+            console.debug('[bulk comments] conteggio cambiato per codice', key, 'da', previousCount, 'a', nextCount);
+        }
+    });
+
+    Object.keys(commentListCache).forEach(function(key) {
+        if (!Object.prototype.hasOwnProperty.call(cacheObject, key) || changedCodes.has(key)) {
+            delete commentListCache[key];
+            console.debug('[comments cache] svuotata lista commenti cache per codice', key, 'dopo bulk commenti');
+        }
     });
 
     Object.keys(commentCache).forEach(function(key) {
@@ -1383,6 +1454,7 @@ function syncCommentSummaryForMedia(mediaItems, summaryList) {
         mediaItem.comments = count;
     });
 }
+
 
 function getLikedMediaIdsForCurrentUser() {
     try {
@@ -1626,7 +1698,16 @@ function showDetailScreen(mediaItem, mediaIndex) {
     if (commentButton && mediaCode) {
         commentButton.addEventListener('click', async function() {
             try {
+                const cachedComments = getCachedCommentsByCode(mediaCode);
+                if (Array.isArray(cachedComments)) {
+                    console.debug('[api] usa cache commenti per codice', mediaCode, 'numero commenti:', cachedComments.length);
+                    renderCommentsSheet(detailScreen, cachedComments, mediaCode);
+                    return;
+                }
+
+                console.debug('[api] richiesta backend commenti per codice', mediaCode);
                 const comments = await getCommentsByCodice(mediaCode);
+                setCachedCommentsByCode(mediaCode, comments);
                 renderCommentsSheet(detailScreen, comments, mediaCode);
             } catch (error) {
                 console.error('Errore nel recupero dei commenti:', error);
@@ -1703,6 +1784,8 @@ function showDetailScreen(mediaItem, mediaIndex) {
 
                 const currentCount = getCommentCountByCode(mediaCode);
                 const nextCount = currentCount + 1;
+
+                clearCommentListCacheForCode(mediaCode);
 
                 mediaItem.commentCount = nextCount;
                 mediaItem.comments = nextCount;
