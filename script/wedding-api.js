@@ -52,6 +52,116 @@ async function loadImages() {
   }
 }
 
+// Restituisce il conteggio di tutti i likes di tutte le immagini
+async function getBulkLikes() {
+    const response = await fetch(`${API_URL}/api/v1/like/bulk`);
+    const result = await response.json();
+
+    if (result && result.status === "SUCCESS_STATUS" && Array.isArray(result.data)) {
+        return result.data;
+    } else {
+        throw new Error(result.message || "Errore durante il recupero dei like.");
+    }
+}
+
+// Aggiunge il like ad un'immagine
+async function addLike(codice, user) {
+    if (!codice) {
+      throw new Error("Codice non valido.");
+    }
+
+    if (!user) {
+      throw new Error("Utente non valido.");
+    }
+
+    const payload = {
+      codice: codice,
+      user: user
+    };
+
+    const response = await fetch(`${API_URL}/api/v1/like`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+
+    if (result && result.status === "SUCCESS_STATUS") {
+      return true; // Like aggiunto con successo
+    } else {
+      throw new Error(result.message || "Errore durante l'aggiunta del like.");
+    }
+}
+
+// Invia un commento associato a un'immagine
+async function addComment(codice, user, text) {
+  if (!codice) {
+    throw new Error("Codice non valido.");
+  }
+
+  if (!user) {
+    throw new Error("Utente non valido.");
+  }
+
+  if (!text) {
+    throw new Error("Testo del commento non valido.");
+  }
+
+  const payload = {
+    codice: codice,
+    user: user,
+    text: text
+  };
+
+  const response = await fetch(`${API_URL}/api/v1/comment`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const result = await response.json();
+
+  if (result && result.status === "SUCCESS_STATUS") {
+    return true; // Commento aggiunto con successo
+  } else {
+    throw new Error(result.message || "Errore durante l'aggiunta del commento.");
+  }
+
+}
+
+
+// Restituisce il conteggio di tutti i commenti di tutte le immagini
+async function getBulkComments() {
+    const response = await fetch(`${API_URL}/api/v1/comment/bulk`);
+    const result = await response.json();
+
+    if (result && result.status === "SUCCESS_STATUS" && Array.isArray(result.data)) {
+        return result.data;
+    } else {
+        throw new Error(result.message || "Errore durante il recupero dei commenti.");
+    }
+}
+
+async function getCommentsByCodice(codice) {
+  if (!codice) {
+    throw new Error("Codice non valido.");
+  }
+
+  const response = await fetch(`${API_URL}/api/v1/comment/${codice}`);
+  const result = await response.json();
+
+  if (result && result.status === "SUCCESS_STATUS" && Array.isArray(result.data)) {
+    return result.data;
+  } else {
+    throw new Error(result.message || "Errore durante il recupero dei commenti.");
+  }
+}
+
 
 // 3. Funzione per inviare foto/video a Google Drive
 async function uploadMedia(files, user) {

@@ -1,5 +1,5 @@
 const SLIDESHOW_INTERVAL = 5000; // Intervallo di 5 secondi per lo slideshow
-const SLIDESHOW_NUM_IMAGES = 6; // Numero massimo di immagini da mostrare nello slideshow
+const SLIDESHOW_NUM_IMAGES = 4; // Numero massimo di immagini da mostrare nello slideshow
 const GRID_PAGE_SIZE = 6;
 const gridFeedState = {
     media: [],
@@ -17,8 +17,11 @@ const slideshowState = {
 
 const GRID_FEED_STATE_KEY = 'gridFeedState';
 const SLIDESHOW_STATE_KEY = 'slideshowState';
+const DETAIL_STATE_KEY = 'detailScreenState';
 const MAX_SELECTED_FILES = 4;
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+const likeCache = {};
+const commentCache = {};
 
 let selectedFiles = []; // Array per memorizzare i file selezionati per l'upload
 
@@ -30,6 +33,12 @@ const PULL_THRESHOLD = 80; // Pixel di trascinamento necessari per attivare l'az
 
 let ptrIndicator;
 let ptrText;
+
+const detailSwipeState = {
+    startY: 0,
+    currentY: 0,
+    isDragging: false
+};
 
 function getPullDistance() {
     return Math.max(0, currentY - startY);
@@ -145,8 +154,10 @@ if ('serviceWorker' in navigator) {
 
 
 document.addEventListener('DOMContentLoaded', function() {
-    const submitButton = document.getElementById('login-submit');
+    loadLikeCacheFromStorage();
+
     const nameInput = document.getElementById('login-name');
+    const submitButton = document.getElementById('login-submit');
 
     if (submitButton) {
         submitButton.onclick = handleLoginSubmit;
@@ -360,6 +371,9 @@ function onPageRefresh() {
             case 'upload':
                 showUploadPanel();
                 break;
+            case 'detail':
+                restoreDetailScreenFromSession();
+                break;
             default:
                 showLoginPanel();
                 break;
@@ -422,6 +436,14 @@ function handleLoginSubmit() {
         showMessage("Inserisci un nome valido per procedere.");
         return;
     }
+
+    if (userName.length > 50) {
+        nameInput.classList.add('is-error');
+        nameInput.focus();
+        showMessage("Il nome può contenere al massimo 50 caratteri.");
+        return;
+    }
+
     nameInput.classList.remove('is-error');
 
     // Se l'username è lo stesso di quello salvato, procede direttamente con il login
@@ -549,6 +571,21 @@ async function showGridPanel() {
 
         const mediaItems = Array.isArray(data) ? data : [];
 
+        try {
+            const bulkLikeSummary = await getBulkLikes();
+            syncLikeSummaryForMedia(mediaItems, bulkLikeSummary);
+            refreshSlideshowFromGrid();
+        } catch (error) {
+            console.warn('Impossibile caricare il riepilogo bulk dei like:', error);
+        }
+
+        try {
+            const bulkCommentSummary = await getBulkComments();
+            syncCommentSummaryForMedia(mediaItems, bulkCommentSummary);
+        } catch (error) {
+            console.warn('Impossibile caricare il riepilogo bulk dei commenti:', error);
+        }
+
         gridFeedState.media = mediaItems;
         feedContainer.innerHTML = '';
 
@@ -632,6 +669,15 @@ function getThumbnailMediaImageUrl(item) {
     return item.thumbnailUrl || item.src || '';
 }
 
+function refreshSlideshowFromGrid() {
+    if (!Array.isArray(gridFeedState.media) || gridFeedState.media.length === 0) {
+        resetSlideshow();
+        return;
+    }
+
+    initializeSlideshow(gridFeedState.media);
+}
+
 function initializeSlideshow(sortedData) {
     resetSlideshow();
 
@@ -640,15 +686,45 @@ function initializeSlideshow(sortedData) {
         return;
     }
 
-    const imageUrls = sortedData
-        .filter(function(item) {
+    const rankedImageItems = sortedData
+        .map(function(item, index) {
             const mediaUrl = getThumbnailMediaImageUrl(item);
-            return item && mediaUrl && item.mimeType && item.mimeType.startsWith('image/');
+            if (!item || !mediaUrl || !item.mimeType || !item.mimeType.startsWith('image/')) {
+                return null;
+            }
+
+            const mediaCode = getMediaCode(item);
+            const likeCount = Number(
+                getLikeCountByCode(mediaCode)
+                || Number(item.likeCount || item.likes || 0)
+                || 0
+            );
+
+            return {
+                index: index,
+                item: item,
+                likeCount: likeCount,
+                mediaUrl: mediaUrl
+            };
         })
-        .slice(0, SLIDESHOW_NUM_IMAGES) // Prendi solo le prime 6 immagini
-        .map(function(item) {
-            return getThumbnailMediaImageUrl(item);
-        });
+        .filter(Boolean);
+
+    const hasLikedImages = rankedImageItems.some(function(entry) {
+        return entry.likeCount > 0;
+    });
+
+    const selectedImageItems = rankedImageItems
+        .sort(function(a, b) {
+            if (hasLikedImages) {
+                return b.likeCount - a.likeCount || a.index - b.index;
+            }
+            return a.index - b.index;
+        })
+        .slice(0, SLIDESHOW_NUM_IMAGES);
+
+    const imageUrls = selectedImageItems.map(function(entry) {
+        return entry.mediaUrl;
+    });
 
     if (imageUrls.length === 0) {
         slideshowImage.src = 'img/no-image.jpg';
@@ -673,14 +749,42 @@ function initializeSlideshow(sortedData) {
     }, SLIDESHOW_INTERVAL);
 }
 
-function createGalleryItemMarkup(item) {
+function createGalleryItemMarkup(item, index) {
     const mediaUrl = getThumbnailMediaImageUrl(item);
 
     if (item && item.mimeType && item.mimeType.startsWith('video/')) {
-        return `<div class="gallery-item"><video src="${mediaUrl}" controls playsinline preload="none"></video></div>`;
+        return `
+            <div class="gallery-item gallery-item--video" data-media-index="${index}">
+                <img src="${mediaUrl}" alt="Video matrimonio" loading="lazy" />
+                <div class="gallery-video-overlay" aria-hidden="true">
+                    <span class="gallery-video-play"></span>
+                </div>
+            </div>
+        `;
     }
 
-    return `<div class="gallery-item"><img src="${mediaUrl}" alt="Foto matrimonio" loading="lazy" /></div>`;
+    return `<div class="gallery-item" data-media-index="${index}"><img src="${mediaUrl}" alt="Foto matrimonio" loading="lazy" /></div>`;
+}
+
+function bindGridItemClicks(feedContainer) {
+    if (!feedContainer) {
+        return;
+    }
+
+    const cards = feedContainer.querySelectorAll('.gallery-item');
+    cards.forEach(function(card) {
+        card.onclick = function() {
+            const index = Number(card.dataset.mediaIndex);
+            if (!Number.isInteger(index)) {
+                return;
+            }
+
+            const item = gridFeedState.media[index];
+            if (item) {
+                showDetailScreen(item);
+            }
+        };
+    });
 }
 
 function appendNextGridPage(feedContainer) {
@@ -706,13 +810,14 @@ function appendNextGridPage(feedContainer) {
    
     const chunkHtml = gridFeedState.media
         .slice(start, end)
-        .map(function(item) {
-            return createGalleryItemMarkup(item);
+        .map(function(item, index) {
+            return createGalleryItemMarkup(item, start + index);
         })
         .join('');
 
     // Inserisce prima il markup senza src per evitare il burst di richieste concorrenti
     feedContainer.insertAdjacentHTML('beforeend', chunkHtml);
+    bindGridItemClicks(feedContainer);
 
     // Stagger: assegna i src con piccolo ritardo per ridurre richieste simultanee al server
     const newItems = feedContainer.querySelectorAll('.gallery-item:not([data-src-loaded]) img[src]');
@@ -779,6 +884,851 @@ function setupGridInfiniteScroll(feedContainer) {
     gridFeedState.observer.observe(sentinel);
 }
 
+function getMediaDetailSource(item) {
+    if (!item) {
+        return '';
+    }
+
+    if (item.mimeType && item.mimeType.startsWith('video/')) {
+        return item.originalUrl || item.src || item.previewUrl || item.thumbnailUrl || '';
+    }
+
+    return item.previewUrl || item.thumbnailUrl || item.src || '';
+}
+
+function formatMediaDate(dateValue) {
+    if (!dateValue) {
+        return '';
+    }
+
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) {
+        return dateValue;
+    }
+
+    return date.toLocaleDateString('it-IT', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+    });
+}
+
+function getDetailMediaIndexByItem(mediaItem) {
+    if (!Array.isArray(gridFeedState.media) || !mediaItem) {
+        return 0;
+    }
+
+    const index = gridFeedState.media.findIndex(function(item) {
+        return item === mediaItem;
+    });
+
+    return index >= 0 ? index : 0;
+}
+
+function showDetailMediaByIndex(targetIndex) {
+    if (!Array.isArray(gridFeedState.media) || gridFeedState.media.length === 0) {
+        return;
+    }
+
+    const maxIndex = gridFeedState.media.length - 1;
+    const clampedIndex = Math.min(Math.max(targetIndex, 0), maxIndex);
+
+    if (clampedIndex !== targetIndex) {
+        return;
+    }
+
+    const nextMediaItem = gridFeedState.media[clampedIndex];
+    if (nextMediaItem) {
+        showDetailScreen(nextMediaItem, clampedIndex);
+    }
+}
+
+function bindDetailSwipeNavigation(detailScreen) {
+    if (!detailScreen) {
+        return;
+    }
+
+    detailScreen.removeEventListener('touchstart', detailScreen._detailTouchStartHandler);
+    detailScreen.removeEventListener('touchmove', detailScreen._detailTouchMoveHandler);
+    detailScreen.removeEventListener('touchend', detailScreen._detailTouchEndHandler);
+    detailScreen.removeEventListener('touchcancel', detailScreen._detailTouchEndHandler);
+
+    detailScreen._detailTouchStartHandler = function(event) {
+        if (!event || !event.touches || event.touches.length === 0) {
+            return;
+        }
+
+        const target = event.target;
+        if (target && target.closest && target.closest('button')) {
+            return;
+        }
+
+        detailSwipeState.startY = event.touches[0].clientY;
+        detailSwipeState.currentY = detailSwipeState.startY;
+        detailSwipeState.isDragging = true;
+    };
+
+    detailScreen._detailTouchMoveHandler = function(event) {
+        if (!detailSwipeState.isDragging || !event || !event.touches || event.touches.length === 0) {
+            return;
+        }
+
+        detailSwipeState.currentY = event.touches[0].clientY;
+    };
+
+    detailScreen._detailTouchEndHandler = function() {
+        if (!detailSwipeState.isDragging) {
+            return;
+        }
+
+        const deltaY = detailSwipeState.currentY - detailSwipeState.startY;
+        if (Math.abs(deltaY) > 80) {
+            const currentIndex = Number(detailScreen.dataset.mediaIndex || 0);
+            const lastIndex = gridFeedState.media.length - 1;
+
+            if (currentIndex === 0 && deltaY > 0) {
+                detailSwipeState.startY = 0;
+                detailSwipeState.currentY = 0;
+                detailSwipeState.isDragging = false;
+                return;
+            }
+
+            if (currentIndex === lastIndex && deltaY < 0) {
+                detailSwipeState.startY = 0;
+                detailSwipeState.currentY = 0;
+                detailSwipeState.isDragging = false;
+                return;
+            }
+
+            showDetailMediaByIndex(currentIndex + (deltaY < 0 ? 1 : -1));
+        }
+
+        detailSwipeState.startY = 0;
+        detailSwipeState.currentY = 0;
+        detailSwipeState.isDragging = false;
+    };
+
+    detailScreen.addEventListener('touchstart', detailScreen._detailTouchStartHandler, { passive: true });
+    detailScreen.addEventListener('touchmove', detailScreen._detailTouchMoveHandler, { passive: true });
+    detailScreen.addEventListener('touchend', detailScreen._detailTouchEndHandler, { passive: true });
+    detailScreen.addEventListener('touchcancel', detailScreen._detailTouchEndHandler, { passive: true });
+}
+
+function getMediaCode(mediaItem) {
+    if (!mediaItem) {
+        return null;
+    }
+
+    return mediaItem.codice || mediaItem.id || mediaItem.mediaId || mediaItem.code || mediaItem.name || null;
+}
+
+function saveDetailScreenState(mediaItem, mediaIndex) {
+    if (!mediaItem) {
+        return;
+    }
+
+    const detailState = {
+        mediaCode: String(getMediaCode(mediaItem) || ''),
+        mediaIndex: Number.isInteger(mediaIndex) ? mediaIndex : getDetailMediaIndexByItem(mediaItem)
+    };
+
+    sessionStorage.setItem(DETAIL_STATE_KEY, JSON.stringify(detailState));
+}
+
+function restoreDetailScreenFromSession() {
+    const rawDetailState = sessionStorage.getItem(DETAIL_STATE_KEY);
+    if (!rawDetailState) {
+        showGridPanel();
+        return;
+    }
+
+    try {
+        const detailState = JSON.parse(rawDetailState);
+        const mediaCode = detailState && detailState.mediaCode ? String(detailState.mediaCode) : null;
+        const mediaIndex = detailState && Number.isInteger(detailState.mediaIndex) ? detailState.mediaIndex : 0;
+
+        if (!mediaCode) {
+            showGridPanel();
+            return;
+        }
+
+        const mediaItem = Array.isArray(gridFeedState.media)
+            ? gridFeedState.media.find(function(item) {
+                return String(getMediaCode(item)) === mediaCode;
+            })
+            : null;
+
+        if (mediaItem) {
+            showDetailScreen(mediaItem, mediaIndex);
+            return;
+        }
+
+        showGridPanel();
+    } catch (error) {
+        console.warn('Dettaglio non ripristinabile da sessionStorage:', error);
+        showGridPanel();
+    }
+}
+
+function getCurrentUserStorageKey() {
+    const userName = (localStorage.getItem('userName') || 'guest').trim().toLowerCase();
+    return `wedding-liked-media-${userName}`;
+}
+
+const LIKE_SUMMARY_STORAGE_KEY = 'wedding-like-summary';
+const COMMENT_SUMMARY_STORAGE_KEY = 'wedding-comment-summary';
+
+function loadLikeCacheFromStorage() {
+    try {
+        const storedValue = localStorage.getItem(LIKE_SUMMARY_STORAGE_KEY);
+        if (!storedValue) {
+            return;
+        }
+
+        const parsedValue = JSON.parse(storedValue);
+        if (!parsedValue || typeof parsedValue !== 'object') {
+            return;
+        }
+
+        Object.keys(likeCache).forEach(function(key) {
+            delete likeCache[key];
+        });
+
+        Object.keys(parsedValue).forEach(function(key) {
+            likeCache[key] = Number(parsedValue[key]) || 0;
+        });
+    } catch (error) {
+        console.warn('Errore nel recupero della cache like dal localStorage:', error);
+    }
+}
+
+function saveLikeCacheToStorage() {
+    localStorage.setItem(LIKE_SUMMARY_STORAGE_KEY, JSON.stringify(likeCache));
+}
+
+function loadCommentCacheFromStorage() {
+    try {
+        const storedValue = localStorage.getItem(COMMENT_SUMMARY_STORAGE_KEY);
+        if (!storedValue) {
+            return;
+        }
+
+        const parsedValue = JSON.parse(storedValue);
+        if (!parsedValue || typeof parsedValue !== 'object') {
+            return;
+        }
+
+        Object.keys(commentCache).forEach(function(key) {
+            delete commentCache[key];
+        });
+
+        Object.keys(parsedValue).forEach(function(key) {
+            commentCache[key] = Number(parsedValue[key]) || 0;
+        });
+    } catch (error) {
+        console.warn('Errore nel recupero della cache commenti dal localStorage:', error);
+    }
+}
+
+function saveCommentCacheToStorage() {
+    localStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(commentCache));
+}
+
+function getLikeSummaryFromStorage() {
+    try {
+        const storedValue = localStorage.getItem(LIKE_SUMMARY_STORAGE_KEY);
+        if (!storedValue) {
+            return [];
+        }
+
+        const parsedValue = JSON.parse(storedValue);
+        if (!parsedValue) {
+            return [];
+        }
+
+        if (Array.isArray(parsedValue)) {
+            return parsedValue.map(function(item) {
+                return {
+                    codice: String(item && item.codice || ''),
+                    likeCount: Number(item && item.likeCount) || 0
+                };
+            }).filter(function(item) {
+                return !!item.codice;
+            });
+        }
+
+        if (typeof parsedValue !== 'object') {
+            return [];
+        }
+
+        return Object.keys(parsedValue).map(function(key) {
+            return {
+                codice: String(key),
+                likeCount: Number(parsedValue[key]) || 0
+            };
+        });
+    } catch (error) {
+        console.warn('Errore nel recupero del riepilogo like dal localStorage:', error);
+        return [];
+    }
+}
+
+function saveLikeSummaryToStorage(summaryList) {
+    if (!Array.isArray(summaryList)) {
+        return;
+    }
+
+    const cacheObject = {};
+    summaryList.forEach(function(item) {
+        if (item && item.codice) {
+            cacheObject[String(item.codice)] = Number(item.likeCount) || 0;
+        }
+    });
+
+    Object.keys(likeCache).forEach(function(key) {
+        delete likeCache[key];
+    });
+    Object.keys(cacheObject).forEach(function(key) {
+        likeCache[key] = Number(cacheObject[key]) || 0;
+    });
+
+    localStorage.setItem(LIKE_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
+}
+
+function getCommentSummaryFromStorage() {
+    try {
+        const storedValue = localStorage.getItem(COMMENT_SUMMARY_STORAGE_KEY);
+        if (!storedValue) {
+            return [];
+        }
+
+        const parsedValue = JSON.parse(storedValue);
+        if (!parsedValue) {
+            return [];
+        }
+
+        if (Array.isArray(parsedValue)) {
+            return parsedValue.map(function(item) {
+                return {
+                    codice: String(item && item.codice || ''),
+                    commentCount: Number(item && item.commentCount) || 0
+                };
+            }).filter(function(item) {
+                return !!item.codice;
+            });
+        }
+
+        if (typeof parsedValue !== 'object') {
+            return [];
+        }
+
+        return Object.keys(parsedValue).map(function(key) {
+            return {
+                codice: String(key),
+                commentCount: Number(parsedValue[key]) || 0
+            };
+        });
+    } catch (error) {
+        console.warn('Errore nel recupero del riepilogo commenti dal localStorage:', error);
+        return [];
+    }
+}
+
+function saveCommentSummaryToStorage(summaryList) {
+    if (!Array.isArray(summaryList)) {
+        return;
+    }
+
+    const cacheObject = {};
+    summaryList.forEach(function(item) {
+        if (item && item.codice) {
+            cacheObject[String(item.codice)] = Number(item.commentCount) || 0;
+        }
+    });
+
+    Object.keys(commentCache).forEach(function(key) {
+        delete commentCache[key];
+    });
+    Object.keys(cacheObject).forEach(function(key) {
+        commentCache[key] = Number(cacheObject[key]) || 0;
+    });
+
+    localStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
+}
+
+function getLikeCountByCode(mediaCode) {
+    if (!mediaCode) {
+        return 0;
+    }
+
+    const normalizedCode = String(mediaCode);
+    if (Object.prototype.hasOwnProperty.call(likeCache, normalizedCode)) {
+        return Number(likeCache[normalizedCode]) || 0;
+    }
+
+    const summaryList = getLikeSummaryFromStorage();
+    const match = summaryList.find(function(item) {
+        return String(item && item.codice) === normalizedCode;
+    });
+
+    if (!match) {
+        return 0;
+    }
+
+    return Number(match.likeCount) || 0;
+}
+
+function syncLikeSummaryForMedia(mediaItems, summaryList) {
+    if (!Array.isArray(mediaItems)) {
+        return;
+    }
+
+    const normalizedSummary = Array.isArray(summaryList) ? summaryList.map(function(item) {
+        return {
+            codice: String(item && item.codice || ''),
+            likeCount: Number(item && item.likeCount) || 0
+        };
+    }).filter(function(item) {
+        return !!item.codice;
+    }) : [];
+
+    const cacheObject = {};
+    normalizedSummary.forEach(function(item) {
+        cacheObject[item.codice] = item.likeCount;
+    });
+
+    Object.keys(likeCache).forEach(function(key) {
+        delete likeCache[key];
+    });
+    Object.keys(cacheObject).forEach(function(key) {
+        likeCache[key] = Number(cacheObject[key]) || 0;
+    });
+
+    localStorage.setItem(LIKE_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
+
+    mediaItems.forEach(function(mediaItem) {
+        const mediaCode = getMediaCode(mediaItem);
+        if (!mediaCode) {
+            return;
+        }
+
+        const count = Number(cacheObject[String(mediaCode)]) || 0;
+        mediaItem.likeCount = count;
+        mediaItem.likes = count;
+    });
+
+    if (Array.isArray(mediaItems) && mediaItems.length > 0) {
+        refreshSlideshowFromGrid();
+    }
+}
+
+function getCommentCountByCode(mediaCode) {
+    if (!mediaCode) {
+        return 0;
+    }
+
+    const normalizedCode = String(mediaCode);
+    if (Object.prototype.hasOwnProperty.call(commentCache, normalizedCode)) {
+        return Number(commentCache[normalizedCode]) || 0;
+    }
+
+    const summaryList = getCommentSummaryFromStorage();
+    const match = summaryList.find(function(item) {
+        return String(item && item.codice) === normalizedCode;
+    });
+
+    if (!match) {
+        return 0;
+    }
+
+    return Number(match.commentCount) || 0;
+}
+
+function syncCommentSummaryForMedia(mediaItems, summaryList) {
+    if (!Array.isArray(mediaItems)) {
+        return;
+    }
+
+    const normalizedSummary = Array.isArray(summaryList) ? summaryList.map(function(item) {
+        return {
+            codice: String(item && item.codice || ''),
+            commentCount: Number(item && item.commentCount) || 0
+        };
+    }).filter(function(item) {
+        return !!item.codice;
+    }) : [];
+
+    const cacheObject = {};
+    normalizedSummary.forEach(function(item) {
+        cacheObject[item.codice] = item.commentCount;
+    });
+
+    Object.keys(commentCache).forEach(function(key) {
+        delete commentCache[key];
+    });
+    Object.keys(cacheObject).forEach(function(key) {
+        commentCache[key] = Number(cacheObject[key]) || 0;
+    });
+
+    localStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
+
+    mediaItems.forEach(function(mediaItem) {
+        const mediaCode = getMediaCode(mediaItem);
+        if (!mediaCode) {
+            return;
+        }
+
+        const count = Number(cacheObject[String(mediaCode)]) || 0;
+        mediaItem.commentCount = count;
+        mediaItem.comments = count;
+    });
+}
+
+function getLikedMediaIdsForCurrentUser() {
+    try {
+        const storedValue = localStorage.getItem(getCurrentUserStorageKey());
+        if (!storedValue) {
+            return [];
+        }
+
+        const parsedValue = JSON.parse(storedValue);
+        return Array.isArray(parsedValue) ? parsedValue.map(function(value) {
+            return String(value);
+        }) : [];
+    } catch (error) {
+        console.warn('Errore nel recupero dei like salvati nel localStorage:', error);
+        return [];
+    }
+}
+
+function saveLikedMediaForCurrentUser(mediaCode) {
+    if (!mediaCode) {
+        return;
+    }
+
+    const currentUserKey = getCurrentUserStorageKey();
+    const likedIds = getLikedMediaIdsForCurrentUser();
+    const normalizedCode = String(mediaCode);
+
+    if (!likedIds.includes(normalizedCode)) {
+        likedIds.push(normalizedCode);
+        localStorage.setItem(currentUserKey, JSON.stringify(likedIds));
+    }
+}
+
+function isMediaLikedByCurrentUser(mediaItem) {
+    const mediaCode = getMediaCode(mediaItem);
+    if (!mediaCode) {
+        return false;
+    }
+
+    return getLikedMediaIdsForCurrentUser().includes(String(mediaCode));
+}
+
+function applyLikeVisualState(button, countElement, isLiked, countValue) {
+    if (!button || !countElement) {
+        return;
+    }
+
+    const numericCount = Number(countValue) || 0;
+    countElement.textContent = String(numericCount);
+    countElement.dataset.count = String(numericCount);
+
+    if (isLiked) {
+        button.dataset.liked = 'true';
+        button.setAttribute('aria-pressed', 'true');
+        button.classList.add('is-liked');
+        button.style.color = '#ff4d6d';
+        button.innerHTML = '<i class="fa fa-heart" aria-hidden="true"></i>';
+        button.disabled = true;
+        return;
+    }
+
+    button.dataset.liked = 'false';
+    button.setAttribute('aria-pressed', 'false');
+    button.classList.remove('is-liked');
+    button.style.color = '#fff';
+    button.innerHTML = '<i class="fa fa-heart-o" aria-hidden="true"></i>';
+    button.disabled = false;
+}
+
+function formatItalianDate(dateValue) {
+    if (!dateValue) {
+        return '';
+    }
+
+    const parsedDate = new Date(dateValue);
+    if (Number.isNaN(parsedDate.getTime())) {
+        return String(dateValue);
+    }
+
+    return new Intl.DateTimeFormat('it-IT', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(parsedDate);
+}
+
+function renderCommentsSheet(detailScreen, comments, mediaCode) {
+    const existingBackdrop = detailScreen.querySelector('.detail-comments-backdrop');
+    const existingSheet = detailScreen.querySelector('.detail-comments-sheet');
+
+    if (existingBackdrop) {
+        existingBackdrop.remove();
+    }
+
+    if (existingSheet) {
+        existingSheet.remove();
+    }
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'detail-comments-backdrop';
+    backdrop.setAttribute('aria-hidden', 'true');
+
+    const sheet = document.createElement('div');
+    sheet.className = 'detail-comments-sheet';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-label', 'Lista commenti');
+
+    const safeComments = Array.isArray(comments) ? comments : [];
+    const listMarkup = safeComments.length > 0
+        ? safeComments.map((comment) => {
+            const userName = comment && comment.user ? String(comment.user) : 'Utente';
+            const text = comment && comment.text ? String(comment.text) : '';
+            const createdAt = formatItalianDate(comment && comment.createdAt ? comment.createdAt : '');
+            return `
+                <div class="detail-comments-item">
+                    <div class="detail-comments-item__header">
+                        <span class="detail-comments-item__user">${userName}</span>
+                        <span class="detail-comments-item__date">${createdAt}</span>
+                    </div>
+                    <p class="detail-comments-item__text">${text}</p>
+                </div>
+            `;
+        }).join('')
+        : '<div class="detail-comments-empty">Nessun commento ancora.</div>';
+
+    sheet.innerHTML = `
+        <div class="detail-comments-sheet__handle"></div>
+        <div class="detail-comments-sheet__header">
+            <h3>Commenti</h3>
+            <button type="button" class="detail-comments-sheet__close" aria-label="Chiudi commenti">
+                <i class="fa fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="detail-comments-sheet__list">${listMarkup}</div>
+    `;
+
+    detailScreen.appendChild(backdrop);
+    detailScreen.appendChild(sheet);
+
+    const closeButton = sheet.querySelector('.detail-comments-sheet__close');
+    if (closeButton) {
+        closeButton.addEventListener('click', () => {
+            backdrop.classList.remove('is-visible');
+            sheet.classList.remove('is-open');
+            setTimeout(() => {
+                backdrop.remove();
+                sheet.remove();
+            }, 220);
+        });
+    }
+
+    backdrop.addEventListener('click', () => {
+        closeButton && closeButton.click();
+    });
+
+    requestAnimationFrame(() => {
+        backdrop.classList.add('is-visible');
+        sheet.classList.add('is-open');
+    });
+
+    return sheet;
+}
+
+function showDetailScreen(mediaItem, mediaIndex) {
+    const detailScreen = document.getElementById('detail-screen');
+    if (!detailScreen || !mediaItem) {
+        return;
+    }
+
+    hideAllPanels();
+    sessionStorage.setItem('lastActivePanel', 'detail');
+    saveDetailScreenState(mediaItem, mediaIndex);
+    detailScreen.style.display = 'block';
+
+    const resolvedIndex = Number.isInteger(mediaIndex)
+        ? mediaIndex
+        : getDetailMediaIndexByItem(mediaItem);
+    detailScreen.dataset.mediaIndex = String(resolvedIndex);
+
+    const isVideo = mediaItem.mimeType && mediaItem.mimeType.startsWith('video/');
+    const sourceUrl = getMediaDetailSource(mediaItem);
+
+    const mediaMarkup = isVideo
+        ? `<video src="${sourceUrl}" controls playsinline autoplay muted></video>`
+        : `<img src="${sourceUrl}" alt="Dettaglio media" />`;
+
+    const uploaderName = mediaItem.user || 'Utente';
+    const mediaCode = getMediaCode(mediaItem);
+    const initialLikeCount = getLikeCountByCode(mediaCode) || Number(mediaItem.likeCount || mediaItem.likes || 0) || 0;
+    const initialCommentCount = getCommentCountByCode(mediaCode) || Number(mediaItem.commentCount || mediaItem.comments || 0) || 0;
+    const alreadyLikedByUser = isMediaLikedByCurrentUser(mediaItem);
+
+    const mediaWrapper = document.createElement('div');
+    mediaWrapper.className = 'detail-media-wrapper is-transitioning';
+    mediaWrapper.innerHTML = mediaMarkup;
+
+    detailScreen.innerHTML = `
+        <div class="detail-header">
+            <div class="detail-user">
+                <img src="img/profilo.jpg" alt="Profilo utente" class="detail-user-avatar" />
+                <span class="detail-user-name">${uploaderName}</span>
+            </div>
+            <button type="button" class="detail-close" onclick="showGridPanel()" aria-label="Chiudi dettaglio">
+                <i class="fa fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+    `;
+    detailScreen.appendChild(mediaWrapper);
+    detailScreen.insertAdjacentHTML('beforeend', `
+        <div class="detail-actions" aria-label="Azioni media">
+            <div class="detail-action-group">
+                <button type="button" class="detail-action detail-action--like" data-code="${mediaCode || ''}" data-liked="${mediaItem.isLiked || mediaItem.liked ? 'true' : 'false'}" aria-label="Mi piace" aria-pressed="${mediaItem.isLiked || mediaItem.liked ? 'true' : 'false'}">
+                    <i class="fa ${mediaItem.isLiked || mediaItem.liked ? 'fa-heart' : 'fa-heart-o'}" aria-hidden="true"></i>
+                </button>
+                <span class="detail-action-count" data-count="${initialLikeCount}">${initialLikeCount}</span>
+            </div>
+            <div class="detail-action-group">
+                <button type="button" class="detail-action detail-action--comment" aria-label="Commenti">
+                    <i class="fa fa-comment-o" aria-hidden="true"></i>
+                </button>
+                <span class="detail-action-count detail-action-count--comments" data-count="${initialCommentCount}">${initialCommentCount}</span>
+            </div>
+        </div>
+        <div class="detail-comment-composer" aria-label="Aggiungi commento">
+            <textarea class="detail-comment-input" maxlength="200" rows="1" placeholder="Aggiungi un commento..." aria-label="Scrivi un commento"></textarea>
+            <button type="button" class="detail-comment-submit" aria-label="Invia commento">
+                <i class="fa fa-paper-plane" aria-hidden="true"></i>
+            </button>
+        </div>
+    `);
+
+    const likeButton = detailScreen.querySelector('.detail-action--like');
+    const likeCountElement = detailScreen.querySelector('.detail-action--like').nextElementSibling;
+    const commentButton = detailScreen.querySelector('.detail-action--comment');
+    const commentCountElement = detailScreen.querySelector('.detail-action-count--comments');
+    const commentInput = detailScreen.querySelector('.detail-comment-input');
+    const commentSubmitButton = detailScreen.querySelector('.detail-comment-submit');
+
+    if (commentButton && mediaCode) {
+        commentButton.addEventListener('click', async function() {
+            try {
+                const comments = await getCommentsByCodice(mediaCode);
+                renderCommentsSheet(detailScreen, comments, mediaCode);
+            } catch (error) {
+                console.error('Errore nel recupero dei commenti:', error);
+                renderCommentsSheet(detailScreen, [], mediaCode);
+                showMessage('Impossibile caricare i commenti al momento.');
+            }
+        });
+    }
+
+    if (likeButton && likeCountElement) {
+        const isLikedState = alreadyLikedByUser || Boolean(mediaItem.isLiked || mediaItem.liked);
+        applyLikeVisualState(likeButton, likeCountElement, isLikedState, initialLikeCount);
+
+        likeButton.addEventListener('click', async function() {
+            if (likeButton.dataset.liked === 'true' || !mediaCode) {
+                return;
+            }
+
+            const user = localStorage.getItem('userName') || 'guest';
+            likeButton.disabled = true;
+
+            try {
+                await addLike(mediaCode, user);
+                saveLikedMediaForCurrentUser(mediaCode);
+
+                const currentCount = getLikeCountByCode(mediaCode);
+                const nextCount = currentCount + 1;
+
+                mediaItem.likeCount = nextCount;
+                mediaItem.likes = nextCount;
+                mediaItem.isLiked = true;
+                mediaItem.liked = true;
+
+                likeCache[String(mediaCode)] = nextCount;
+                saveLikeCacheToStorage();
+                refreshSlideshowFromGrid();
+
+                applyLikeVisualState(likeButton, likeCountElement, true, nextCount);
+            } catch (error) {
+                console.error('Errore nell\'aggiunta del like:', error);
+                showMessage('Impossibile aggiungere il like al momento.');
+                likeButton.disabled = false;
+            }
+        });
+    }
+
+    if (commentInput && commentSubmitButton && commentCountElement && mediaCode) {
+        commentInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                commentSubmitButton.click();
+            }
+        });
+
+        commentSubmitButton.addEventListener('click', async function() {
+            const commentText = commentInput.value.trim();
+            if (!commentText) {
+                commentInput.focus();
+                showMessage('Scrivi un commento prima di inviare.');
+                return;
+            }
+
+            if (commentText.length > 200) {
+                showMessage('Il commento può contenere al massimo 200 caratteri.');
+                commentInput.focus();
+                return;
+            }
+
+            const user = localStorage.getItem('userName') || 'guest';
+            commentSubmitButton.disabled = true;
+
+            try {
+                await addComment(mediaCode, user, commentText);
+
+                const currentCount = getCommentCountByCode(mediaCode);
+                const nextCount = currentCount + 1;
+
+                mediaItem.commentCount = nextCount;
+                mediaItem.comments = nextCount;
+                commentCache[String(mediaCode)] = nextCount;
+                localStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(commentCache));
+
+                commentCountElement.textContent = String(nextCount);
+                commentCountElement.dataset.count = String(nextCount);
+                commentInput.value = '';
+                commentInput.focus();
+            } catch (error) {
+                console.error('Errore nell\'aggiunta del commento:', error);
+                showMessage('Impossibile aggiungere il commento al momento.');
+            } finally {
+                commentSubmitButton.disabled = false;
+            }
+        });
+    }
+
+    requestAnimationFrame(function() {
+        mediaWrapper.classList.remove('is-transitioning');
+    });
+
+    bindDetailSwipeNavigation(detailScreen);
+}
+
 function showUploadPanel() {
     hideAllPanels();
     sessionStorage.setItem('lastActivePanel', 'upload');
@@ -793,6 +1743,7 @@ function hideAllPanels() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('grid-screen').style.display = 'none';
     document.getElementById('upload-screen').style.display = 'none';
+    document.getElementById('detail-screen').style.display = 'none';
 }
 
 
