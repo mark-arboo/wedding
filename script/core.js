@@ -41,6 +41,12 @@ const detailSwipeState = {
     isDragging: false
 };
 
+
+const LIKE_SUMMARY_STORAGE_KEY = 'wedding-like-summary';
+const COMMENT_SUMMARY_STORAGE_KEY = 'wedding-comment-summary';
+
+
+
 function getPullDistance() {
     return Math.max(0, currentY - startY);
 }
@@ -540,6 +546,8 @@ async function showGridPanel() {
     ptrText = document.getElementById('ptr-text');
 
     const feedContainer = document.getElementById('feed');
+    
+    await ensureLikedMediaIdsForCurrentUser();
 
     if (tryRestoreGridPanelFromSession(feedContainer)) {
         sessionStorage.setItem('lastActivePanel', 'grid');
@@ -557,6 +565,7 @@ async function showGridPanel() {
     }
 
     try {
+
         const data = await loadImages();
 
         if (data.length === 0) {
@@ -1076,12 +1085,11 @@ function getCurrentUserStorageKey() {
     return `wedding-liked-media-${userName}`;
 }
 
-const LIKE_SUMMARY_STORAGE_KEY = 'wedding-like-summary';
-const COMMENT_SUMMARY_STORAGE_KEY = 'wedding-comment-summary';
+
 
 function loadLikeCacheFromStorage() {
     try {
-        const storedValue = localStorage.getItem(LIKE_SUMMARY_STORAGE_KEY);
+        const storedValue = sessionStorage.getItem(LIKE_SUMMARY_STORAGE_KEY);
         if (!storedValue) {
             return;
         }
@@ -1099,17 +1107,17 @@ function loadLikeCacheFromStorage() {
             likeCache[key] = Number(parsedValue[key]) || 0;
         });
     } catch (error) {
-        console.warn('Errore nel recupero della cache like dal localStorage:', error);
+        console.warn('Errore nel recupero della cache like dal sessionStorage:', error);
     }
 }
 
 function saveLikeCacheToStorage() {
-    localStorage.setItem(LIKE_SUMMARY_STORAGE_KEY, JSON.stringify(likeCache));
+    sessionStorage.setItem(LIKE_SUMMARY_STORAGE_KEY, JSON.stringify(likeCache));
 }
 
 function loadCommentCacheFromStorage() {
     try {
-        const storedValue = localStorage.getItem(COMMENT_SUMMARY_STORAGE_KEY);
+        const storedValue = sessionStorage.getItem(COMMENT_SUMMARY_STORAGE_KEY);
         if (!storedValue) {
             return;
         }
@@ -1127,12 +1135,12 @@ function loadCommentCacheFromStorage() {
             commentCache[key] = Number(parsedValue[key]) || 0;
         });
     } catch (error) {
-        console.warn('Errore nel recupero della cache commenti dal localStorage:', error);
+        console.warn('Errore nel recupero della cache commenti dal sessionStorage:', error);
     }
 }
 
 function saveCommentCacheToStorage() {
-    localStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(commentCache));
+    sessionStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(commentCache));
 }
 
 function normalizeCommentCacheKey(mediaCode) {
@@ -1185,7 +1193,7 @@ function clearCommentListCache() {
 
 function getLikeSummaryFromStorage() {
     try {
-        const storedValue = localStorage.getItem(LIKE_SUMMARY_STORAGE_KEY);
+        const storedValue = sessionStorage.getItem(LIKE_SUMMARY_STORAGE_KEY);
         if (!storedValue) {
             return [];
         }
@@ -1217,7 +1225,7 @@ function getLikeSummaryFromStorage() {
             };
         });
     } catch (error) {
-        console.warn('Errore nel recupero del riepilogo like dal localStorage:', error);
+        console.warn('Errore nel recupero del riepilogo like dal sessionStorage:', error);
         return [];
     }
 }
@@ -1241,12 +1249,12 @@ function saveLikeSummaryToStorage(summaryList) {
         likeCache[key] = Number(cacheObject[key]) || 0;
     });
 
-    localStorage.setItem(LIKE_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
+    sessionStorage.setItem(LIKE_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
 }
 
 function getCommentSummaryFromStorage() {
     try {
-        const storedValue = localStorage.getItem(COMMENT_SUMMARY_STORAGE_KEY);
+        const storedValue = sessionStorage.getItem(COMMENT_SUMMARY_STORAGE_KEY);
         if (!storedValue) {
             return [];
         }
@@ -1278,7 +1286,7 @@ function getCommentSummaryFromStorage() {
             };
         });
     } catch (error) {
-        console.warn('Errore nel recupero del riepilogo commenti dal localStorage:', error);
+        console.warn('Errore nel recupero del riepilogo commenti dal sessionStorage:', error);
         return [];
     }
 }
@@ -1302,7 +1310,7 @@ function saveCommentSummaryToStorage(summaryList) {
         commentCache[key] = Number(cacheObject[key]) || 0;
     });
 
-    localStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
+    sessionStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
 }
 
 function getLikeCountByCode(mediaCode) {
@@ -1353,7 +1361,7 @@ function syncLikeSummaryForMedia(mediaItems, summaryList) {
         likeCache[key] = Number(cacheObject[key]) || 0;
     });
 
-    localStorage.setItem(LIKE_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
+    sessionStorage.setItem(LIKE_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
 
     mediaItems.forEach(function(mediaItem) {
         const mediaCode = getMediaCode(mediaItem);
@@ -1441,7 +1449,7 @@ function syncCommentSummaryForMedia(mediaItems, summaryList) {
         commentCache[key] = Number(cacheObject[key]) || 0;
     });
 
-    localStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
+    sessionStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(cacheObject));
 
     mediaItems.forEach(function(mediaItem) {
         const mediaCode = getMediaCode(mediaItem);
@@ -1462,13 +1470,36 @@ function getLikedMediaIdsForCurrentUser() {
         if (!storedValue) {
             return [];
         }
-
+        
         const parsedValue = JSON.parse(storedValue);
         return Array.isArray(parsedValue) ? parsedValue.map(function(value) {
             return String(value);
         }) : [];
     } catch (error) {
         console.warn('Errore nel recupero dei like salvati nel localStorage:', error);
+        return [];
+    }
+}
+
+async function ensureLikedMediaIdsForCurrentUser() {
+    const storageKey = getCurrentUserStorageKey();
+    const storedValue = localStorage.getItem(storageKey);
+
+    if (storedValue) {
+        return getLikedMediaIdsForCurrentUser();
+    }
+
+    const currentUser = (localStorage.getItem('userName') || 'guest').trim();
+    if (!currentUser) {
+        return [];
+    }
+
+    try {
+        const userLikes = await getUserLikes(currentUser);
+        localStorage.setItem(storageKey, JSON.stringify(userLikes));
+        return userLikes;
+    } catch (error) {
+        console.warn('Errore nel recupero dei like dell\'utente dal server:', error);
         return [];
     }
 }
@@ -1494,7 +1525,7 @@ function isMediaLikedByCurrentUser(mediaItem) {
         return false;
     }
 
-    return getLikedMediaIdsForCurrentUser().includes(String(mediaCode));
+    return (getLikedMediaIdsForCurrentUser()).includes(String(mediaCode));
 }
 
 function applyLikeVisualState(button, countElement, isLiked, countValue) {
@@ -1790,7 +1821,7 @@ function showDetailScreen(mediaItem, mediaIndex) {
                 mediaItem.commentCount = nextCount;
                 mediaItem.comments = nextCount;
                 commentCache[String(mediaCode)] = nextCount;
-                localStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(commentCache));
+                sessionStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(commentCache));
 
                 commentCountElement.textContent = String(nextCount);
                 commentCountElement.dataset.count = String(nextCount);
