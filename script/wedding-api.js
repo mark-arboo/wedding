@@ -3,7 +3,7 @@
 const API_URL = "http://localhost:8080/wedding-api";
 const WEDDING_TOKEN = "20c8ad3f-0876-42bf-8e56-08f73c7413ea-f7d40330-028e-4399-83f0-4dbd834d3850-2ef4d8ce-3ec6-4279-9df7-3d93aee4b6fc";
 
-// 1. Effettua la login al sistema
+// Effettua la login al sistema
 async function glogin(user, token) {
   try {
         // verifica se username e token sono validi (puoi aggiungere la tua logica di autenticazione qui)
@@ -39,7 +39,7 @@ async function glogin(user, token) {
   }
 }
 
-// 1. Funzione per caricare le immagini/video da Google Drive
+// Funzione per caricare le immagini/video da Google Drive
 async function loadImages() {
   // const feedContainer = document.getElementById(root);
   try {
@@ -217,6 +217,7 @@ async function getBulkComments() {
   }
 }
 
+// Restituisce i commenti associati a un codice specifico
 async function getCommentsByCodice(codice) {
   try {
     if (!codice) {
@@ -240,16 +241,10 @@ async function getCommentsByCodice(codice) {
     console.error(err);
     throw new Error("Errore durante il recupero dei commenti.");
   }
-
-
 }
 
 
-
-
-
-
-// 3. Funzione per inviare foto/video sull'object storage
+// Funzione per inviare foto/video sull'object storage
 async function uploadMedia(files, user) {
   try {
   
@@ -263,7 +258,8 @@ async function uploadMedia(files, user) {
           const payload = {
             user: user,
             fileName: file.name,
-            mimetype: file.type
+            mimetype: file.type,
+            size: file.size
           };
 
           const response = await fetch(`${API_URL}/api/v1/media/upload-url`, {
@@ -278,13 +274,13 @@ async function uploadMedia(files, user) {
           const result = await response.json();
 
           if (result && result.status === "SUCCESS_STATUS" && result.data) {
-            console.log("presigned-url del file " + file.name + ": " + result.data.presignedUrl);
+            console.log("presigned-url del file " + file.name + ": " + result.data.url);
           } else {
             throw new Error(result.message || "Errore durante l'upload del file.");
           }
 
           // 2. Caricamento file sulla presigned url
-          await fetch(result.data.presignedUrl, {
+          await fetch(result.data.url, {
             method: "PUT",
             headers: {
               "Content-Type": file.type
@@ -297,7 +293,7 @@ async function uploadMedia(files, user) {
           // 3. Conferma file caricato al server
           const confirmPayload = {
             user: user,
-            codice: result.data.uuid
+            codice: result.data.codice
           };
 
           const confirmResponse = await fetch(`${API_URL}/api/v1/media/confirm-upload`, {
