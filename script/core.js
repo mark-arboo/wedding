@@ -451,6 +451,16 @@ function handleLoginSubmit() {
         return;
     }
 
+    // Verifica che userName contenga solo lettere, numeri e qualche carattere speciale ammissibile nei nomi
+    const validUserNamePattern = /^[a-zA-Z0-9 _.-]+$/;
+    if (!validUserNamePattern.test(userName)) {
+        nameInput.classList.add('is-error');
+        nameInput.focus();
+        showMessage("Il nome può contenere solo lettere, numeri, spazi, trattini e punti.");
+        return;
+    }
+
+
     nameInput.classList.remove('is-error');
 
     // Se l'username è lo stesso di quello salvato, procede direttamente con il login
