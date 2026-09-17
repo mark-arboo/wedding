@@ -278,13 +278,17 @@ async function uploadMedia(files, user) {
           }
 
           // 2. Caricamento file sulla presigned url
-          await fetch(result.data.url, {
+          const uploadResponse = await fetch(result.data.url, {
             method: "PUT",
             headers: {
               "Content-Type": file.type
             },
             body: file
           });
+
+          if (!uploadResponse.ok) {
+            throw new Error("Errore durante il caricamento del file sull'object storage.");
+          }
 
           console.log("File " + file.name + " caricato con successo sull'object storage.");
 
@@ -307,9 +311,13 @@ async function uploadMedia(files, user) {
           if (!confirmResult || confirmResult.status !== "SUCCESS_STATUS") {
             throw new Error((confirmResult && confirmResult.message) || "Errore durante la conferma dell'upload del file.");
           }
+
           console.log("File " + file.name + " confermato con successo al server.");
 
         }
+
+        // 4. Aggiungi uno sleep per dare il tempo al server di generare le immagini thumbnail
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
         return true;
   

@@ -60,10 +60,9 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
-  const isGoogleImage = url.origin === 'https://lh3.googleusercontent.com' && url.pathname.startsWith('/d/');
 
   // Intercettiamo solo le richieste per le immagini
-  if (request.destination === 'image' || isGoogleImage) {
+  if (request.destination === 'image') {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         // Cerca l'immagine in cache
