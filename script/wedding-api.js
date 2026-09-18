@@ -1,4 +1,4 @@
-const API_URL = "http://localhost/wedding-api";
+const API_URL = "http://localhost:8080/wedding-api";
 const WEDDING_TOKEN = "20c8ad3f-0876-42bf-8e56-08f73c7413ea-f7d40330-028e-4399-83f0-4dbd834d3850-2ef4d8ce-3ec6-4279-9df7-3d93aee4b6fc";
 
 // Effettua la login al sistema
@@ -327,3 +327,64 @@ async function uploadMedia(files, user) {
   }
 }
 
+// Invia un messaggio al guestbook al server
+async function sendGuestbookMessage(user, message) {
+    try {
+        if (!user) {
+            throw new Error("Utente non valido.");
+        }
+
+        if (!message || !String(message).trim()) {
+            throw new Error("Messaggio non valido.");
+        }
+
+        const payload = {
+            user: user,
+            message: message
+        };
+
+        const response = await fetch(`${API_URL}/api/v1/guestbook/message`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "wedding-token": WEDDING_TOKEN
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (result && result.status === "SUCCESS_STATUS") {
+            return true;
+        }
+
+        throw new Error(result && result.message ? result.message : "Errore durante l'invio del messaggio al guestbook.");
+    } catch (err) {
+        console.error(err);
+        throw new Error(err && err.message ? err.message : "Errore durante l'invio del messaggio al guestbook.");
+    }
+}
+
+// Legge i messaggi del guestbook dal server. L'oggetto di ritorno è un array di oggetti aventi i campi: user, message, createdAt.
+async function readGuestbookMessages() {
+    try {
+        const response = await fetch(`${API_URL}/api/v1/guestbook/messages`, {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                "wedding-token": WEDDING_TOKEN
+            }
+        });
+
+        const result = await response.json();
+
+        if (result && result.status === "SUCCESS_STATUS" && Array.isArray(result.data)) {
+            return result.data;
+        }
+
+        throw new Error(result && result.message ? result.message : "Errore durante il recupero dei messaggi del guestbook.");
+    } catch (err) {
+        console.error(err);
+        throw new Error(err && err.message ? err.message : "Errore durante il recupero dei messaggi del guestbook.");
+    }
+}

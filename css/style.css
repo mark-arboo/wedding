@@ -835,6 +835,156 @@
 	opacity: 0.92;
 }
 
+#guestbook-screen {
+	min-height: 100dvh;
+	background: var(--background);
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.guestbook-layout {
+	width: min(600px, calc(100% - 32px));
+	margin: 0 auto;
+	padding: 18px 0 90px;
+}
+
+.guestbook-header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 18px;
+	padding-top: 4px;
+}
+
+.guestbook-back {
+	border: 0;
+	background: transparent;
+	color: var(--ivory);
+	font-size: 1.2rem;
+	padding: 0;
+	cursor: pointer;
+}
+
+.guestbook-title {
+	margin: 0;
+	font-family: 'Inter Local', 'Segoe UI', Arial, sans-serif;
+	font-size: 1.05rem;
+	font-weight: 700;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	color: var(--ivory);
+}
+
+.guestbook-composer {
+	display: grid;
+	gap: 10px;
+	margin-bottom: 18px;
+	padding: 14px;
+	border-radius: 18px;
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.15);
+}
+
+.guestbook-input {
+	width: 100%;
+	display: block;
+	resize: vertical;
+	min-height: 90px;
+	max-height: 180px;
+	border: 0;
+	border-radius: 12px;
+	padding: 14px 16px;
+	font-family: 'Inter Local', 'Segoe UI', Arial, sans-serif;
+	font-size: 0.96rem;
+	line-height: 1.5;
+	color: var(--ink);
+	background: rgba(255, 255, 255, 0.96);
+}
+
+.guestbook-input:focus {
+	outline: 2px solid rgba(253, 8, 144, 0.4);
+}
+
+.guestbook-submit {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	border: 0;
+	border-radius: 12px;
+	padding: 12px 16px;
+	font-family: 'Inter Local', 'Segoe UI', Arial, sans-serif;
+	font-size: 0.96rem;
+	font-weight: 700;
+	color: #fff;
+	background: var(--primary);
+	cursor: pointer;
+	box-shadow: 0 8px 18px rgba(253, 8, 144, 0.28);
+}
+
+.guestbook-submit.is-loading {
+	opacity: 0.8;
+	cursor: progress;
+}
+
+.guestbook-list {
+	display: grid;
+	gap: 12px;
+}
+
+.guestbook-message {
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 16px;
+	padding: 14px 14px 12px;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.guestbook-message__header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 8px;
+}
+
+.guestbook-message__user {
+	font-family: 'Inter Local', 'Segoe UI', Arial, sans-serif;
+	font-size: 0.86rem;
+	font-weight: 700;
+	color: var(--ivory);
+	letter-spacing: 0.2px;
+}
+
+.guestbook-message__date {
+	font-family: 'Inter Local', 'Segoe UI', Arial, sans-serif;
+	font-size: 0.74rem;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+.guestbook-message__text {
+	margin: 0;
+	font-family: 'Inter Local', 'Segoe UI', Arial, sans-serif;
+	font-size: 0.96rem;
+	line-height: 1.5;
+	color: rgba(255, 255, 255, 0.9);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.guestbook-empty {
+	padding: 24px 18px;
+	border-radius: 16px;
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px dashed rgba(255, 255, 255, 0.18);
+	font-family: 'Inter Local', 'Segoe UI', Arial, sans-serif;
+	font-size: 0.96rem;
+	line-height: 1.5;
+	text-align: center;
+	color: rgba(255, 255, 255, 0.72);
+}
+
 #upload-screen {
 	min-height: 100dvh;
 	background: var(--background);
@@ -1004,4 +1154,65 @@
 	opacity: 0.45;
 	cursor: not-allowed;
 	box-shadow: none;
+}
+
+
+
+
+
+.tabbar {
+  position: fixed;
+  bottom: 20px;
+  left: 10%;
+  right: 10%;
+  width: 80%;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  gap: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 6px 5px;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+  z-index: 1000;
+  color: #333;
+  border-radius: 50px;
+} 
+
+.tabButton {
+  background-color: transparent;
+  border-radius: 50px;
+  border: none;
+  padding: 5px 16px;
+  min-height: 50px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  color: #999;
+  transition: color 0.2s ease;
+}
+
+.tabButton i {
+  font-size: 24px;
+}
+
+.tabButton span {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+button.active {
+    color: var(--primary);
+    background-color: var(--color-tabbar-background);
+    opacity: 1;
+    border: 1px solid var(--color-tabbar-background);
+
+}
+
+.tabButton:active {
+    transform: scale(0.95);
 }

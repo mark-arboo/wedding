@@ -381,6 +381,9 @@ function onPageRefresh() {
             case 'detail':
                 restoreDetailScreenFromSession();
                 break;
+            case 'guestbook':
+                showGuestbookPanel();
+                break;
             default:
                 showLoginPanel();
                 break;
@@ -390,6 +393,150 @@ function onPageRefresh() {
     }
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function renderGuestbookMessages(messages) {
+    const list = document.getElementById('guestbook-list');
+    if (!list) {
+        return;
+    }
+
+    const safeMessages = Array.isArray(messages) ? messages : [];
+
+    if (safeMessages.length === 0) {
+        list.innerHTML = '<div class="guestbook-empty">Nessun messaggio ancora. Sii il primo a lasciare un augurio.</div>';
+        return;
+    }
+
+    list.innerHTML = safeMessages.map(function(entry) {
+        const user = entry && entry.user ? escapeHtml(entry.user) : 'Ospite';
+        const message = entry && entry.message ? escapeHtml(entry.message) : '';
+        const createdAt = entry && entry.createdAt ? formatItalianDate(entry.createdAt) : 'Ora';
+
+        return `
+            <article class="guestbook-message">
+                <div class="guestbook-message__header">
+                    <span class="guestbook-message__user">${user}</span>
+                    <span class="guestbook-message__date">${createdAt}</span>
+                </div>
+                <p class="guestbook-message__text">${message}</p>
+            </article>
+        `;
+    }).join('');
+}
+
+async function loadGuestbookMessages() {
+    try {
+        const messages = await readGuestbookMessages();
+        renderGuestbookMessages(messages);
+    } catch (error) {
+        console.error('Errore nel recupero dei messaggi del guestbook:', error);
+        renderGuestbookMessages([]);
+        showMessage(error && error.message ? error.message : 'Impossibile caricare i messaggi del guestbook.');
+    }
+}
+
+async function submitGuestbookMessage() {
+    const input = document.getElementById('guestbook-input');
+    const submitButton = document.getElementById('guestbook-submit');
+
+    if (!input || !submitButton) {
+        return;
+    }
+
+    const message = input.value.trim();
+    const user = localStorage.getItem('userName') || 'Guest';
+
+    if (!message) {
+        input.focus();
+        showMessage('Scrivi un messaggio prima di inviare.');
+        return;
+    }
+
+    submitButton.disabled = true;
+    submitButton.classList.add('is-loading');
+
+    try {
+        await sendGuestbookMessage(user, message);
+        input.value = '';
+        await loadGuestbookMessages();
+    } catch (error) {
+        console.error('Errore nell\'invio del messaggio guestbook:', error);
+        showMessage(error && error.message ? error.message : 'Impossibile inviare il messaggio.');
+    } finally {
+        submitButton.disabled = false;
+        submitButton.classList.remove('is-loading');
+    }
+}
+
+function showGuestbookPanel() {
+    const guestbookScreen = document.getElementById('guestbook-screen');
+    if (!guestbookScreen) {
+        return;
+    }
+
+    hideAllPanels();
+    sessionStorage.setItem('lastActivePanel', 'guestbook');
+    guestbookScreen.style.display = 'block';
+    toggleTabBar(true);
+    updateTabSelection('guestbook');
+
+    const submitButton = document.getElementById('guestbook-submit');
+    if (submitButton) {
+        submitButton.onclick = submitGuestbookMessage;
+    }
+
+    const input = document.getElementById('guestbook-input');
+    if (input) {
+        input.onkeydown = function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                submitGuestbookMessage();
+            }
+        };
+    }
+
+    loadGuestbookMessages();
+}
+
+function showGridView() {
+    showGridPanel();
+    updateTabSelection('grid');
+}
+
+function showGuestbookView() {
+    showGuestbookPanel();
+    updateTabSelection('guestbook');
+}
+
+function updateTabSelection(activeTab) {
+    const gridButton = document.getElementById('gridViewBtn');
+    const guestbookButton = document.getElementById('guestbookViewBtn');
+
+    if (gridButton) {
+        gridButton.classList.toggle('active', activeTab === 'grid');
+    }
+
+    if (guestbookButton) {
+        guestbookButton.classList.toggle('active', activeTab === 'guestbook');
+    }
+}
+
+function toggleTabBar(isVisible) {
+    const tabbar = document.querySelector('.tabbar');
+    if (!tabbar) {
+        return;
+    }
+
+    tabbar.style.display = isVisible ? 'flex' : 'none';
+}
 
 function showLoginPanel() {
 
@@ -403,6 +550,7 @@ function showLoginPanel() {
     resetSlideshow();
 
     sessionStorage.setItem('lastActivePanel', 'login');
+    toggleTabBar(false);
     document.getElementById('login-screen').style.display = 'block';
 
     const nameInput = document.getElementById('login-name');
@@ -551,6 +699,7 @@ async function showGridPanel() {
 
     hideAllPanels();
     document.getElementById('grid-screen').style.display = 'block';
+    toggleTabBar(true);
 
     ptrIndicator = document.getElementById('ptr-indicator');
     ptrText = document.getElementById('ptr-text');
@@ -1668,6 +1817,7 @@ function showDetailScreen(mediaItem, mediaIndex) {
     }
 
     hideAllPanels();
+    toggleTabBar(false);
     sessionStorage.setItem('lastActivePanel', 'detail');
     saveDetailScreenState(mediaItem, mediaIndex);
     detailScreen.style.display = 'block';
@@ -1857,6 +2007,7 @@ function showUploadPanel() {
     hideAllPanels();
     sessionStorage.setItem('lastActivePanel', 'upload');
     document.getElementById('upload-screen').style.display = 'block';
+    toggleTabBar(false);
     renderSelectedFilesGrid();
 }
 
@@ -1868,6 +2019,7 @@ function hideAllPanels() {
     document.getElementById('grid-screen').style.display = 'none';
     document.getElementById('upload-screen').style.display = 'none';
     document.getElementById('detail-screen').style.display = 'none';
+    document.getElementById('guestbook-screen').style.display = 'none';
 }
 
 
