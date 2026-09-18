@@ -1834,6 +1834,7 @@ function showDetailScreen(mediaItem, mediaIndex) {
 
     const isVideo = mediaItem.mimeType && mediaItem.mimeType.startsWith('video/');
     const sourceUrl = getMediaDetailSource(mediaItem);
+    const downloadUrl = mediaItem.originalUrl || mediaItem.src || mediaItem.previewUrl || mediaItem.thumbnailUrl || sourceUrl || '';
 
     const mediaMarkup = isVideo
         ? `<video src="${sourceUrl}" controls playsinline autoplay muted></video>`
@@ -1875,6 +1876,11 @@ function showDetailScreen(mediaItem, mediaIndex) {
                 </button>
                 <span class="detail-action-count detail-action-count--comments" data-count="${initialCommentCount}">${initialCommentCount}</span>
             </div>
+            <div class="detail-action-group">
+                <button type="button" class="detail-action detail-action--download" data-download-url="${downloadUrl}" aria-label="Scarica media">
+                    <i class="fa fa-download" aria-hidden="true"></i>
+                </button>
+            </div>
         </div>
         <div class="detail-comment-composer" aria-label="Aggiungi commento">
             <textarea class="detail-comment-input" maxlength="200" rows="1" placeholder="Aggiungi un commento..." aria-label="Scrivi un commento"></textarea>
@@ -1888,6 +1894,7 @@ function showDetailScreen(mediaItem, mediaIndex) {
     const likeCountElement = detailScreen.querySelector('.detail-action--like').nextElementSibling;
     const commentButton = detailScreen.querySelector('.detail-action--comment');
     const commentCountElement = detailScreen.querySelector('.detail-action-count--comments');
+    const downloadButton = detailScreen.querySelector('.detail-action--download');
     const commentInput = detailScreen.querySelector('.detail-comment-input');
     const commentSubmitButton = detailScreen.querySelector('.detail-comment-submit');
 
@@ -1948,6 +1955,28 @@ function showDetailScreen(mediaItem, mediaIndex) {
                 likeButton.disabled = false;
             }
         });
+    }
+
+    if (downloadButton) {
+        const downloadUrlValue = (downloadButton.dataset.downloadUrl || '').trim();
+
+        if (!downloadUrlValue) {
+            downloadButton.disabled = true;
+            downloadButton.title = 'Download non disponibile';
+        } else {
+            downloadButton.addEventListener('click', function() {
+                const safeUrl = downloadUrlValue;
+                const fileName = (mediaItem.name || safeUrl.split('/').pop() || `${isVideo ? 'video' : 'image'}-${Date.now()}`);
+                const link = document.createElement('a');
+                link.href = safeUrl;
+                link.download = fileName;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            });
+        }
     }
 
     if (commentInput && commentSubmitButton && commentCountElement && mediaCode) {
