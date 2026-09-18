@@ -422,11 +422,16 @@ function renderGuestbookMessages(messages) {
 
         return `
             <article class="guestbook-message">
-                <div class="guestbook-message__header">
-                    <span class="guestbook-message__user">${user}</span>
-                    <span class="guestbook-message__date">${createdAt}</span>
+                <div class="guestbook-message__avatar-wrap">
+                    <img src="img/profilo.jpg" alt="Profilo utente" class="guestbook-message__avatar" />
                 </div>
-                <p class="guestbook-message__text">${message}</p>
+                <div class="guestbook-message__body">
+                    <div class="guestbook-message__header">
+                        <span class="guestbook-message__user">${user}</span>
+                        <span class="guestbook-message__date">${createdAt}</span>
+                    </div>
+                    <p class="guestbook-message__text">${message}</p>
+                </div>
             </article>
         `;
     }).join('');

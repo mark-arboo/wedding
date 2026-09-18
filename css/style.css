@@ -851,6 +851,7 @@
 .guestbook-header {
 	display: flex;
 	align-items: center;
+	justify-content: center;
 	gap: 12px;
 	margin-bottom: 18px;
 	padding-top: 4px;
@@ -873,6 +874,8 @@
 	letter-spacing: 1px;
 	text-transform: uppercase;
 	color: var(--ivory);
+	text-align: center;
+	width: 100%;
 }
 
 .guestbook-composer {
@@ -934,11 +937,36 @@
 }
 
 .guestbook-message {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
 	background: rgba(255, 255, 255, 0.06);
 	border: 1px solid rgba(255, 255, 255, 0.08);
 	border-radius: 16px;
 	padding: 14px 14px 12px;
 	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.guestbook-message__avatar-wrap {
+	flex-shrink: 0;
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	overflow: hidden;
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.guestbook-message__avatar {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.guestbook-message__body {
+	flex: 1;
+	min-width: 0;
 }
 
 .guestbook-message__header {
@@ -1207,10 +1235,10 @@
 
 button.active {
     color: var(--primary);
-    background-color: var(--color-tabbar-background);
-    opacity: 1;
-    border: 1px solid var(--color-tabbar-background);
-
+    background-color: rgba(255, 255, 255, 0.7);
+    opacity: 0.9;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .tabButton:active {
