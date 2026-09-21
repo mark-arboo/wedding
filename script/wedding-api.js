@@ -241,7 +241,84 @@ async function getCommentsByCodice(codice) {
   }
 }
 
+async function uploadProfileMedia(files, user) {
+try {
+  
+        if (!Array.isArray(files) || files.length === 0) {
+          throw new Error("Nessun file selezionato per il caricamento.");
+        }
 
+          const file = files[0];
+
+          // 1. Richiesta pre-sign URL
+          const payload = {
+            user: user,
+            fileName: file.name,
+            mimetype: file.type,
+            size: file.size
+          };
+
+          const response = await fetch(`${API_URL}/api/v1/login/profile-image/upload-url`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "wedding-token": WEDDING_TOKEN
+            },
+            body: JSON.stringify(payload)
+          });
+
+          const result = await response.json();
+
+          if (result && result.status === "SUCCESS_STATUS" && result.data) {
+            console.log("presigned-url del file " + file.name + ": " + result.data.url);
+          } else {
+            throw new Error(result.message || "Errore durante l'upload del file.");
+          }
+
+          // 2. Caricamento file sulla presigned url
+          const uploadResponse = await fetch(result.data.url, {
+            method: "PUT",
+            headers: {
+              "Content-Type": file.type
+            },
+            body: file
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error("Errore durante il caricamento del file sull'object storage.");
+          }
+
+          console.log("File " + file.name + " caricato con successo sull'object storage.");
+
+          // 3. Conferma file caricato al server
+          const confirmPayload = {
+            user: user,
+            codice: result.data.codice
+          };
+
+          const confirmResponse = await fetch(`${API_URL}/api/v1/login/profile-image/confirm-upload`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "wedding-token": WEDDING_TOKEN
+            },
+            body: JSON.stringify(confirmPayload)
+          });
+
+          const confirmResult = await confirmResponse.json();
+          if (!confirmResult || confirmResult.status !== "SUCCESS_STATUS") {
+            throw new Error((confirmResult && confirmResult.message) || "Errore durante la conferma dell'upload del file.");
+          }
+
+          console.log("File " + file.name + " confermato con successo al server.");
+
+          return confirmResult.data;
+  
+  } catch (err) {
+    console.error(err);
+    throw new Error("Errore durante il caricamento dell'immagine di profilo.");
+  }
+}
 // Funzione per inviare foto/video sull'object storage
 async function uploadMedia(files, user) {
   try {

@@ -163,6 +163,54 @@
       </div>
     </div>
 
+    <!-- PROFILE SCREEN -->
+    <div id="profile-screen" class="app-screen">
+      <div class="profile-layout">
+        <div class="profile-card">
+          <div class="profile-card__identity">
+            <img id="profile-avatar" class="profile-card__avatar" src="img/profilo.jpg" alt="Immagine profilo" />
+            <div class="profile-card__identity-text">
+              <span class="profile-card__label">Nome account</span>
+              <strong id="profile-user-name" class="profile-card__name">Utente</strong>
+            </div>
+          </div>
+
+          <div class="profile-card__upload">
+            <div class="profile-card__upload-copy">
+              <span class="profile-card__label">Immagine profilo</span>
+              <p class="profile-card__hint">Scegli una foto, ritagliala e caricala sul server per salvarne la URL nel profilo.</p>
+            </div>
+            <button type="button" class="profile-card__button" id="profile-upload-button">Carica immagine</button>
+            <input id="profile-image-input" type="file" accept="image/*" hidden />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFILE CROP MODAL -->
+    <div id="profile-crop-modal" class="message-modal profile-crop-modal" role="dialog" aria-modal="true" aria-labelledby="profile-crop-title" aria-describedby="profile-crop-text" aria-hidden="true">
+      <div class="message-modal__content profile-crop-modal__content">
+        <h2 id="profile-crop-title" class="message-modal__title">Ritaglia immagine</h2>
+        <p id="profile-crop-text" class="message-modal__text">Sposta e zooma la foto per scegliere la porzione da usare come immagine profilo.</p>
+
+        <div class="profile-crop-stage-wrap">
+          <div id="profile-crop-stage" class="profile-crop-stage">
+            <img id="profile-crop-image" class="profile-crop-stage__image" alt="Anteprima ritaglio immagine profilo" />
+          </div>
+        </div>
+
+        <label class="profile-crop-zoom" for="profile-crop-zoom">
+          <span>Zoom</span>
+          <input id="profile-crop-zoom" type="range" min="1" max="3" step="0.01" value="1" />
+        </label>
+
+        <div class="profile-crop-actions">
+          <button id="profile-crop-cancel" class="message-modal__button profile-crop-actions__button profile-crop-actions__button--secondary" type="button">Annulla</button>
+          <button id="profile-crop-confirm" class="message-modal__button profile-crop-actions__button" type="button">Conferma e carica</button>
+        </div>
+      </div>
+    </div>
+
 
     <!-- ERROR MODAL -->
     <div id="message-modal" class="message-modal" role="dialog" aria-modal="true" aria-labelledby="message-modal-title" aria-describedby="message-modal-text" aria-hidden="true">
@@ -198,6 +246,10 @@
             <i class="fa fa-book" aria-hidden="true"></i>
             <span>GuestBook</span>
          </button>
+        <button id="profileViewBtn" class="tabButton" onclick="showProfileView()">
+          <i class="fa fa-user" aria-hidden="true"></i>
+          <span>Profilo</span>
+        </button>
     </div>
 
   </body>

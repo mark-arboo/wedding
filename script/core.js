@@ -4,6 +4,7 @@ const GRID_PAGE_SIZE = 6;
 const FEED_PAGE_SIZE = 6;
 const gridFeedState = {
     media: [],
+    profileImageUrl: {},
     renderedCount: 0,
     observer: null,
     sentinel: null,
@@ -52,6 +53,33 @@ const detailSwipeState = {
 
 const LIKE_SUMMARY_STORAGE_KEY = 'wedding-like-summary';
 const COMMENT_SUMMARY_STORAGE_KEY = 'wedding-comment-summary';
+const USER_PROFILE_IMAGE_STORAGE_KEY = 'userProfileImage';
+const PROFILE_CROP_OUTPUT_SIZE = 1024;
+
+const profileCropState = {
+    file: null,
+    objectUrl: '',
+    imageElement: null,
+    stageElement: null,
+    zoom: 1,
+    minZoom: 1,
+    maxZoom: 3,
+    baseScale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    isDragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    startOffsetX: 0,
+    startOffsetY: 0,
+    activePointers: new Map(),
+    dragPointerId: null,
+    pinchStartDistance: 0,
+    pinchStartZoom: 1,
+    pinchStartOffsetX: 0,
+    pinchStartOffsetY: 0,
+    isUploading: false
+};
 
 
 
@@ -170,6 +198,7 @@ if ('serviceWorker' in navigator) {
 
 document.addEventListener('DOMContentLoaded', function() {
     loadLikeCacheFromStorage();
+    bindProfileUploadControls();
 
     const nameInput = document.getElementById('login-name');
     const submitButton = document.getElementById('login-submit');
@@ -191,6 +220,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function getSerializableGridFeedState() {
     return {
         media: Array.isArray(gridFeedState.media) ? gridFeedState.media : [],
+        profileImageUrl: gridFeedState.profileImageUrl && typeof gridFeedState.profileImageUrl === 'object' ? gridFeedState.profileImageUrl : {},
         renderedCount: Number.isFinite(gridFeedState.renderedCount) ? gridFeedState.renderedCount : 0,
         isAppending: false
     };
@@ -263,6 +293,7 @@ function applyStatesFromSession(sessionStates) {
     }
 
     gridFeedState.media = sessionStates.grid.media;
+    gridFeedState.profileImageUrl = buildGridFeedProfileImageIndex(gridFeedState.media);
     gridFeedState.renderedCount = 0;
     gridFeedState.isAppending = false;
 
@@ -395,6 +426,9 @@ function onPageRefresh() {
             case 'guestbook':
                 showGuestbookPanel();
                 break;
+            case 'profile':
+                showProfilePanel();
+                break;
             default:
                 showLoginPanel();
                 break;
@@ -430,11 +464,14 @@ function renderGuestbookMessages(messages) {
         const user = entry && entry.user ? escapeHtml(entry.user) : 'Ospite';
         const message = entry && entry.message ? escapeHtml(entry.message) : '';
         const createdAt = entry && entry.createdAt ? formatItalianDate(entry.createdAt) : 'Ora';
+        const profileImageUrl = entry && typeof entry.profileImageUrl === 'string' && entry.profileImageUrl.trim()
+            ? escapeHtml(entry.profileImageUrl.trim())
+            : 'img/profilo.jpg';
 
         return `
             <article class="guestbook-message">
                 <div class="guestbook-message__avatar-wrap">
-                    <img src="img/profilo.jpg" alt="Profilo utente" class="guestbook-message__avatar" />
+                    <img src="${profileImageUrl}" alt="Profilo utente" class="guestbook-message__avatar" />
                 </div>
                 <div class="guestbook-message__body">
                     <div class="guestbook-message__header">
@@ -537,10 +574,15 @@ function showGuestbookView() {
     updateTabSelection('guestbook');
 }
 
+function showProfileView() {
+    showProfilePanel();
+}
+
 function updateTabSelection(activeTab) {
     const gridButton = document.getElementById('gridViewBtn');
     const feedButton = document.getElementById('feedViewBtn');
     const guestbookButton = document.getElementById('guestbookViewBtn');
+    const profileButton = document.getElementById('profileViewBtn');
 
     if (gridButton) {
         gridButton.classList.toggle('active', activeTab === 'grid');
@@ -553,11 +595,15 @@ function updateTabSelection(activeTab) {
     if (guestbookButton) {
         guestbookButton.classList.toggle('active', activeTab === 'guestbook');
     }
+
+    if (profileButton) {
+        profileButton.classList.toggle('active', activeTab === 'profile');
+    }
 }
 
 function getDetailReturnPanel() {
     const savedPanel = sessionStorage.getItem(DETAIL_RETURN_PANEL_KEY);
-    return savedPanel === 'feed' || savedPanel === 'grid' || savedPanel === 'guestbook' ? savedPanel : 'grid';
+    return savedPanel === 'feed' || savedPanel === 'grid' || savedPanel === 'guestbook' || savedPanel === 'profile' ? savedPanel : 'grid';
 }
 
 function closeDetailScreen() {
@@ -570,6 +616,11 @@ function closeDetailScreen() {
 
     if (returnPanel === 'guestbook') {
         showGuestbookPanel();
+        return;
+    }
+
+    if (returnPanel === 'profile') {
+        showProfilePanel();
         return;
     }
 
@@ -587,6 +638,10 @@ function showPanelByName(panelName, forceReload = false) {
 
     if (panelName === 'login') {
         return showLoginPanel();
+    }
+
+    if (panelName === 'profile') {
+        return showProfilePanel();
     }
 
     if (panelName === 'grid') {
@@ -640,6 +695,570 @@ function showLoginPanel() {
         nameInput.value = savedUserName;
     }
 
+}
+
+function getUserProfileImage() {
+    return localStorage.getItem(USER_PROFILE_IMAGE_STORAGE_KEY) || '';
+}
+
+function saveUserProfileImage(imageUrl) {
+    const normalizedImageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+
+    if (normalizedImageUrl) {
+        localStorage.setItem(USER_PROFILE_IMAGE_STORAGE_KEY, normalizedImageUrl);
+        return;
+    }
+
+    localStorage.removeItem(USER_PROFILE_IMAGE_STORAGE_KEY);
+}
+
+function renderProfilePanel() {
+    const userNameElement = document.getElementById('profile-user-name');
+    const avatarElement = document.getElementById('profile-avatar');
+
+    if (userNameElement) {
+        userNameElement.textContent = localStorage.getItem('userName') || 'Utente';
+    }
+
+    if (avatarElement) {
+        const profileImageUrl = getUserProfileImage();
+        avatarElement.src = profileImageUrl || 'img/profilo.jpg';
+    }
+}
+
+function bindProfileUploadControls() {
+    const uploadButton = document.getElementById('profile-upload-button');
+    const fileInput = document.getElementById('profile-image-input');
+    const zoomInput = document.getElementById('profile-crop-zoom');
+    const cropStage = document.getElementById('profile-crop-stage');
+    const cropImage = document.getElementById('profile-crop-image');
+    const confirmButton = document.getElementById('profile-crop-confirm');
+    const cancelButton = document.getElementById('profile-crop-cancel');
+
+    if (uploadButton) {
+        uploadButton.onclick = openProfileImagePicker;
+    }
+
+    if (fileInput) {
+        fileInput.onchange = handleProfileImageSelected;
+    }
+
+    if (zoomInput) {
+        zoomInput.oninput = handleProfileCropZoomChange;
+    }
+
+    if (cropStage) {
+        cropStage.onpointerdown = handleProfileCropPointerDown;
+        cropStage.onpointermove = handleProfileCropPointerMove;
+        cropStage.onpointerup = handleProfileCropPointerUp;
+        cropStage.onpointercancel = handleProfileCropPointerUp;
+    }
+
+    if (confirmButton) {
+        confirmButton.onclick = confirmProfileCropUpload;
+    }
+
+    if (cancelButton) {
+        cancelButton.onclick = hideProfileCropModal;
+    }
+}
+
+function openProfileImagePicker() {
+    const fileInput = document.getElementById('profile-image-input');
+    if (!fileInput) {
+        return;
+    }
+
+    fileInput.value = '';
+    fileInput.click();
+}
+
+function handleProfileImageSelected(event) {
+    const file = event && event.target && event.target.files ? event.target.files[0] : null;
+    if (!file) {
+        return;
+    }
+
+    if (!file.type || !file.type.startsWith('image/')) {
+        showMessage("Seleziona solo un'immagine valida.");
+        return;
+    }
+
+    showProfileCropModal(file);
+}
+
+function showProfileCropModal(file) {
+    const modal = document.getElementById('profile-crop-modal');
+    const cropImage = document.getElementById('profile-crop-image');
+    const zoomInput = document.getElementById('profile-crop-zoom');
+
+    if (!modal || !cropImage || !zoomInput) {
+        return;
+    }
+
+    hideProfileCropModal();
+
+    profileCropState.file = file;
+    profileCropState.objectUrl = URL.createObjectURL(file);
+    profileCropState.zoom = 1;
+    profileCropState.minZoom = 1;
+    profileCropState.maxZoom = 3;
+    profileCropState.offsetX = 0;
+    profileCropState.offsetY = 0;
+    profileCropState.stageElement = document.getElementById('profile-crop-stage');
+    profileCropState.imageElement = cropImage;
+    profileCropState.isUploading = false;
+
+    zoomInput.value = '1';
+    setProfileCropLoading(false);
+
+    cropImage.onload = function() {
+        initializeProfileCropGeometry();
+    };
+
+    cropImage.src = profileCropState.objectUrl;
+
+    modal.classList.add('is-visible');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function hideProfileCropModal() {
+    const modal = document.getElementById('profile-crop-modal');
+    const cropImage = document.getElementById('profile-crop-image');
+    const fileInput = document.getElementById('profile-image-input');
+
+    if (modal) {
+        modal.classList.remove('is-visible');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    if (cropImage) {
+        cropImage.onload = null;
+        cropImage.removeAttribute('src');
+    }
+
+    if (profileCropState.objectUrl) {
+        URL.revokeObjectURL(profileCropState.objectUrl);
+    }
+
+    profileCropState.file = null;
+    profileCropState.objectUrl = '';
+    profileCropState.imageElement = null;
+    profileCropState.stageElement = null;
+    profileCropState.zoom = 1;
+    profileCropState.minZoom = 1;
+    profileCropState.maxZoom = 3;
+    profileCropState.baseScale = 1;
+    profileCropState.offsetX = 0;
+    profileCropState.offsetY = 0;
+    profileCropState.isDragging = false;
+    profileCropState.isUploading = false;
+    profileCropState.dragStartX = 0;
+    profileCropState.dragStartY = 0;
+    profileCropState.startOffsetX = 0;
+    profileCropState.startOffsetY = 0;
+    profileCropState.activePointers.clear();
+    profileCropState.dragPointerId = null;
+    profileCropState.pinchStartDistance = 0;
+    profileCropState.pinchStartZoom = 1;
+    profileCropState.pinchStartOffsetX = 0;
+    profileCropState.pinchStartOffsetY = 0;
+
+    setProfileCropLoading(false);
+
+    if (fileInput) {
+        fileInput.value = '';
+    }
+}
+
+function initializeProfileCropGeometry() {
+    const stage = document.getElementById('profile-crop-stage');
+    const cropImage = document.getElementById('profile-crop-image');
+    const zoomInput = document.getElementById('profile-crop-zoom');
+
+    if (!stage || !cropImage || !cropImage.naturalWidth || !cropImage.naturalHeight) {
+        return;
+    }
+
+    profileCropState.stageElement = stage;
+    profileCropState.imageElement = cropImage;
+    profileCropState.baseScale = Math.max(stage.clientWidth / cropImage.naturalWidth, stage.clientHeight / cropImage.naturalHeight);
+    profileCropState.zoom = 1;
+    profileCropState.offsetX = 0;
+    profileCropState.offsetY = 0;
+
+    if (zoomInput) {
+        zoomInput.min = String(profileCropState.minZoom);
+        zoomInput.max = String(profileCropState.maxZoom);
+        zoomInput.step = '0.01';
+        zoomInput.value = '1';
+    }
+
+    updateProfileCropImagePosition();
+}
+
+function handleProfileCropZoomChange(event) {
+    const nextZoom = Number(event && event.target ? event.target.value : profileCropState.zoom);
+
+    if (!Number.isFinite(nextZoom)) {
+        return;
+    }
+
+    profileCropState.zoom = clamp(nextZoom, profileCropState.minZoom, profileCropState.maxZoom);
+    updateProfileCropImagePosition();
+}
+
+function handleProfileCropPointerDown(event) {
+    if (!profileCropState.imageElement || !profileCropState.stageElement) {
+        return;
+    }
+
+    event.preventDefault();
+    profileCropState.activePointers.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY
+    });
+
+    if (event.currentTarget && typeof event.currentTarget.setPointerCapture === 'function') {
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch (error) {
+            console.warn('Impossibile catturare il puntatore del crop:', error);
+        }
+    }
+
+    if (profileCropState.activePointers.size === 1) {
+        profileCropState.isDragging = true;
+        profileCropState.dragPointerId = event.pointerId;
+        profileCropState.dragStartX = event.clientX;
+        profileCropState.dragStartY = event.clientY;
+        profileCropState.startOffsetX = profileCropState.offsetX;
+        profileCropState.startOffsetY = profileCropState.offsetY;
+        profileCropState.pinchStartDistance = 0;
+        return;
+    }
+
+    if (profileCropState.activePointers.size >= 2) {
+        beginProfileCropPinch();
+    }
+}
+
+function handleProfileCropPointerMove(event) {
+    if (!profileCropState.activePointers.has(event.pointerId)) {
+        return;
+    }
+
+    event.preventDefault();
+    profileCropState.activePointers.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY
+    });
+
+    if (profileCropState.activePointers.size >= 2) {
+        updateProfileCropPinch();
+        return;
+    }
+
+    if (!profileCropState.isDragging || profileCropState.dragPointerId !== event.pointerId) {
+        return;
+    }
+
+    const deltaX = event.clientX - profileCropState.dragStartX;
+    const deltaY = event.clientY - profileCropState.dragStartY;
+
+    profileCropState.offsetX = profileCropState.startOffsetX + deltaX;
+    profileCropState.offsetY = profileCropState.startOffsetY + deltaY;
+    updateProfileCropImagePosition();
+}
+
+function handleProfileCropPointerUp(event) {
+    if (!profileCropState.activePointers.has(event.pointerId)) {
+        return;
+    }
+
+    profileCropState.activePointers.delete(event.pointerId);
+
+    if (event.currentTarget && typeof event.currentTarget.releasePointerCapture === 'function') {
+        try {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        } catch (error) {
+            console.warn('Impossibile rilasciare il puntatore del crop:', error);
+        }
+    }
+
+    if (profileCropState.activePointers.size === 0) {
+        profileCropState.isDragging = false;
+        profileCropState.dragPointerId = null;
+        profileCropState.pinchStartDistance = 0;
+        return;
+    }
+
+    const firstPointer = Array.from(profileCropState.activePointers.entries())[0];
+    profileCropState.isDragging = true;
+    profileCropState.dragPointerId = firstPointer[0];
+    profileCropState.dragStartX = firstPointer[1].x;
+    profileCropState.dragStartY = firstPointer[1].y;
+    profileCropState.startOffsetX = profileCropState.offsetX;
+    profileCropState.startOffsetY = profileCropState.offsetY;
+    profileCropState.pinchStartDistance = 0;
+    profileCropState.pinchStartZoom = profileCropState.zoom;
+    profileCropState.pinchStartOffsetX = profileCropState.offsetX;
+    profileCropState.pinchStartOffsetY = profileCropState.offsetY;
+
+    if (profileCropState.activePointers.size >= 2) {
+        beginProfileCropPinch();
+    }
+}
+
+function beginProfileCropPinch() {
+    const points = Array.from(profileCropState.activePointers.values());
+
+    if (points.length < 2 || !profileCropState.stageElement) {
+        return;
+    }
+
+    profileCropState.isDragging = false;
+    profileCropState.dragPointerId = null;
+    profileCropState.pinchStartDistance = getDistanceBetweenPoints(points[0], points[1]);
+    profileCropState.pinchStartZoom = profileCropState.zoom;
+    profileCropState.pinchStartOffsetX = profileCropState.offsetX;
+    profileCropState.pinchStartOffsetY = profileCropState.offsetY;
+}
+
+function updateProfileCropPinch() {
+    const points = Array.from(profileCropState.activePointers.values());
+
+    if (points.length < 2 || !profileCropState.stageElement) {
+        return;
+    }
+
+    const currentDistance = getDistanceBetweenPoints(points[0], points[1]);
+
+    if (!profileCropState.pinchStartDistance) {
+        beginProfileCropPinch();
+        return;
+    }
+
+    const stage = profileCropState.stageElement;
+    const currentMidpoint = getMidpoint(points[0], points[1]);
+    const stageCenterX = stage.clientWidth / 2;
+    const stageCenterY = stage.clientHeight / 2;
+    const ratio = currentDistance / profileCropState.pinchStartDistance;
+    const nextZoom = clamp(profileCropState.pinchStartZoom * ratio, profileCropState.minZoom, profileCropState.maxZoom);
+    const startScale = profileCropState.baseScale * profileCropState.pinchStartZoom;
+    const nextScale = profileCropState.baseScale * nextZoom;
+
+    if (startScale > 0) {
+        const startCenterX = stageCenterX + profileCropState.pinchStartOffsetX;
+        const startCenterY = stageCenterY + profileCropState.pinchStartOffsetY;
+        const nextCenterX = currentMidpoint.x - ((nextScale / startScale) * (currentMidpoint.x - startCenterX));
+        const nextCenterY = currentMidpoint.y - ((nextScale / startScale) * (currentMidpoint.y - startCenterY));
+
+        profileCropState.offsetX = nextCenterX - stageCenterX;
+        profileCropState.offsetY = nextCenterY - stageCenterY;
+    }
+
+    profileCropState.zoom = nextZoom;
+
+    const zoomInput = document.getElementById('profile-crop-zoom');
+    if (zoomInput) {
+        zoomInput.value = String(nextZoom);
+    }
+
+    updateProfileCropImagePosition();
+}
+
+function getDistanceBetweenPoints(pointA, pointB) {
+    const deltaX = pointB.x - pointA.x;
+    const deltaY = pointB.y - pointA.y;
+    return Math.hypot(deltaX, deltaY);
+}
+
+function getMidpoint(pointA, pointB) {
+    return {
+        x: (pointA.x + pointB.x) / 2,
+        y: (pointA.y + pointB.y) / 2
+    };
+}
+
+function updateProfileCropImagePosition() {
+    const stage = profileCropState.stageElement || document.getElementById('profile-crop-stage');
+    const cropImage = profileCropState.imageElement || document.getElementById('profile-crop-image');
+
+    if (!stage || !cropImage || !cropImage.naturalWidth || !cropImage.naturalHeight) {
+        return;
+    }
+
+    const stageWidth = stage.clientWidth || 280;
+    const stageHeight = stage.clientHeight || stageWidth;
+    const displayScale = profileCropState.baseScale * profileCropState.zoom;
+    const displayWidth = cropImage.naturalWidth * displayScale;
+    const displayHeight = cropImage.naturalHeight * displayScale;
+    const maxOffsetX = Math.max(0, (displayWidth - stageWidth) / 2);
+    const maxOffsetY = Math.max(0, (displayHeight - stageHeight) / 2);
+
+    profileCropState.offsetX = clamp(profileCropState.offsetX, -maxOffsetX, maxOffsetX);
+    profileCropState.offsetY = clamp(profileCropState.offsetY, -maxOffsetY, maxOffsetY);
+
+    cropImage.style.width = `${displayWidth}px`;
+    cropImage.style.height = `${displayHeight}px`;
+    cropImage.style.left = `${(stageWidth / 2) + profileCropState.offsetX}px`;
+    cropImage.style.top = `${(stageHeight / 2) + profileCropState.offsetY}px`;
+}
+
+function setProfileCropLoading(isLoading) {
+    const confirmButton = document.getElementById('profile-crop-confirm');
+    const cancelButton = document.getElementById('profile-crop-cancel');
+
+    profileCropState.isUploading = !!isLoading;
+
+    if (confirmButton) {
+        confirmButton.disabled = !!isLoading;
+        confirmButton.textContent = isLoading ? 'Caricamento...' : 'Conferma e carica';
+    }
+
+    if (cancelButton) {
+        cancelButton.disabled = !!isLoading;
+    }
+}
+
+function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+}
+
+function getProfileCropBlob() {
+    const stage = document.getElementById('profile-crop-stage');
+    const cropImage = document.getElementById('profile-crop-image');
+
+    if (!stage || !cropImage || !cropImage.naturalWidth || !cropImage.naturalHeight) {
+        return Promise.reject(new Error("Impossibile ritagliare l'immagine."));
+    }
+
+    const stageWidth = stage.clientWidth || 280;
+    const stageHeight = stage.clientHeight || stageWidth;
+    const displayScale = profileCropState.baseScale * profileCropState.zoom;
+    const displayWidth = cropImage.naturalWidth * displayScale;
+    const displayHeight = cropImage.naturalHeight * displayScale;
+    const displayedLeft = (stageWidth / 2) + profileCropState.offsetX - (displayWidth / 2);
+    const displayedTop = (stageHeight / 2) + profileCropState.offsetY - (displayHeight / 2);
+    const sourceWidth = stageWidth / displayScale;
+    const sourceHeight = stageHeight / displayScale;
+    const sourceX = clamp(-displayedLeft / displayScale, 0, cropImage.naturalWidth - sourceWidth);
+    const sourceY = clamp(-displayedTop / displayScale, 0, cropImage.naturalHeight - sourceHeight);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = PROFILE_CROP_OUTPUT_SIZE;
+    canvas.height = PROFILE_CROP_OUTPUT_SIZE;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+        return Promise.reject(new Error('Impossibile preparare il ritaglio.'));
+    }
+
+    context.drawImage(
+        cropImage,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        PROFILE_CROP_OUTPUT_SIZE,
+        PROFILE_CROP_OUTPUT_SIZE
+    );
+
+    return new Promise(function(resolve, reject) {
+        canvas.toBlob(function(blob) {
+            if (!blob) {
+                reject(new Error("Impossibile creare l'immagine ritagliata."));
+                return;
+            }
+
+            resolve(blob);
+        }, 'image/jpeg', 0.92);
+    });
+}
+
+function extractProfileImageUrl(uploadResult) {
+    if (!uploadResult) {
+        return '';
+    }
+
+    if (typeof uploadResult === 'string') {
+        return uploadResult.trim();
+    }
+
+    if (typeof uploadResult.url === 'string') {
+        return uploadResult.url.trim();
+    }
+
+    if (typeof uploadResult.imageUrl === 'string') {
+        return uploadResult.imageUrl.trim();
+    }
+
+    if (typeof uploadResult.profileImageUrl === 'string') {
+        return uploadResult.profileImageUrl.trim();
+    }
+
+    return '';
+}
+
+async function confirmProfileCropUpload() {
+    if (profileCropState.isUploading) {
+        return;
+    }
+
+    const currentFile = profileCropState.file;
+    const currentUserName = (localStorage.getItem('userName') || '').trim();
+
+    if (!currentFile) {
+        showMessage("Seleziona prima un'immagine.");
+        return;
+    }
+
+    if (!currentUserName) {
+        showMessage('Nome utente non valido.');
+        return;
+    }
+
+    setProfileCropLoading(true);
+
+    try {
+        const croppedBlob = await getProfileCropBlob();
+        const croppedFileName = currentFile.name.replace(/\.[^.]+$/, '') + '-profile.jpg';
+        const croppedFile = new File([croppedBlob], croppedFileName, { type: 'image/jpeg' });
+        const uploadResult = await uploadProfileMedia([croppedFile], currentUserName);
+        const profileImageUrl = extractProfileImageUrl(uploadResult);
+
+        if (!profileImageUrl) {
+            throw new Error("La URL dell'immagine di profilo non è stata restituita dal server.");
+        }
+
+        saveUserProfileImage(profileImageUrl);
+        renderProfilePanel();
+        hideProfileCropModal();
+        showMessage('Immagine profilo aggiornata con successo.');
+    } catch (error) {
+        console.error("Errore nel caricamento dell'immagine profilo:", error);
+        showMessage(error && error.message ? error.message : "Impossibile caricare l'immagine di profilo.");
+    } finally {
+        setProfileCropLoading(false);
+    }
+}
+
+function showProfilePanel() {
+    const profileScreen = document.getElementById('profile-screen');
+
+    if (!profileScreen) {
+        return;
+    }
+
+    hideAllPanels();
+    sessionStorage.setItem('lastActivePanel', 'profile');
+    profileScreen.style.display = 'block';
+    toggleTabBar(true);
+    updateTabSelection('profile');
+    renderProfilePanel();
 }
 
 function handleLoginSubmit() {
@@ -875,6 +1494,7 @@ async function showGridPanel(forceReload = false) {
         }
 
         gridFeedState.media = mediaItems;
+        gridFeedState.profileImageUrl = buildGridFeedProfileImageIndex(mediaItems);
         feedContainer.innerHTML = '';
 
         appendNextGridPage(feedContainer);
@@ -1001,6 +1621,7 @@ async function showFeedPanel(forceReload = false) {
         }
 
         gridFeedState.media = mediaItems;
+        gridFeedState.profileImageUrl = buildGridFeedProfileImageIndex(mediaItems);
         gridFeedState.renderedCount = 0;
         renderFeedPanelFromMedia(feedContainer);
         saveAppStatesToSession();
@@ -1028,6 +1649,7 @@ function resetGridPaginationState() {
     }
 
     gridFeedState.media = [];
+    gridFeedState.profileImageUrl = {};
     gridFeedState.renderedCount = 0;
     gridFeedState.observer = null;
     gridFeedState.sentinel = null;
@@ -1229,6 +1851,7 @@ function createFeedItemMarkup(item, index) {
     const mediaUrl = getThumbnailMediaImageUrl(item) || 'img/no-image.jpg';
     const isVideo = item && item.mimeType && item.mimeType.startsWith('video/');
     const uploaderName = escapeHtml(getMediaUploaderName(item));
+    const uploaderProfileImageUrl = escapeHtml(getMediaUploaderProfileImageUrl(item));
     const mediaCode = getMediaCode(item);
     const mediaUploadedAt = item.createdAt || item.uploadedAt || item.date || item.dataCaricamento || '';
     const mediaUploadedAtLabel = mediaUploadedAt ? formatItalianDate(mediaUploadedAt) : 'Data non disponibile';
@@ -1241,7 +1864,7 @@ function createFeedItemMarkup(item, index) {
         <article class="feed-card" data-media-index="${index}" data-media-code="${safeMediaCode}">
             <div class="feed-card__header">
                 <div class="feed-card__user">
-                    <img src="img/profilo.jpg" alt="Profilo utente" class="feed-card__avatar" />
+                    <img src="${uploaderProfileImageUrl}" alt="Profilo utente" class="feed-card__avatar" />
                     <div class="feed-card__user-meta">
                         <span class="feed-card__uploader">${uploaderName}</span>
                         <span class="feed-card__datetime">${mediaUploadedAtLabel}</span>
@@ -1810,6 +2433,43 @@ function getMediaUploaderName(mediaItem) {
     return mediaItem.user || mediaItem.username || mediaItem.uploader || mediaItem.owner || 'Utente';
 }
 
+function buildGridFeedProfileImageIndex(mediaItems) {
+    const profileImageIndex = {};
+
+    if (!Array.isArray(mediaItems)) {
+        return profileImageIndex;
+    }
+
+    mediaItems.forEach(function(mediaItem) {
+        const mediaCode = getMediaCode(mediaItem);
+        const profileImageUrl = mediaItem && typeof mediaItem.profileImageUrl === 'string' ? mediaItem.profileImageUrl.trim() : '';
+
+        if (mediaCode && profileImageUrl) {
+            profileImageIndex[String(mediaCode)] = profileImageUrl;
+        }
+    });
+
+    return profileImageIndex;
+}
+
+function getMediaUploaderProfileImageUrl(mediaItem) {
+    const mediaCode = getMediaCode(mediaItem);
+
+    if (mediaCode && gridFeedState.profileImageUrl && typeof gridFeedState.profileImageUrl === 'object') {
+        const cachedProfileImageUrl = gridFeedState.profileImageUrl[String(mediaCode)];
+        if (typeof cachedProfileImageUrl === 'string' && cachedProfileImageUrl.trim()) {
+            return cachedProfileImageUrl.trim();
+        }
+    }
+
+    if (!mediaItem || typeof mediaItem.profileImageUrl !== 'string') {
+        return 'img/profilo.jpg';
+    }
+
+    const profileImageUrl = mediaItem.profileImageUrl.trim();
+    return profileImageUrl || 'img/profilo.jpg';
+}
+
 function canCurrentUserManageMedia() {
     const currentUserName = (localStorage.getItem('userName') || '').trim().toLowerCase();
     return currentUserName === 'sposo' || currentUserName === 'sposa';
@@ -2365,11 +3025,14 @@ function buildCommentsListMarkup(comments) {
             const userName = comment && comment.user ? String(comment.user) : 'Utente';
             const text = comment && comment.text ? String(comment.text) : '';
             const createdAt = formatItalianDate(comment && comment.createdAt ? comment.createdAt : '');
+            const profileImageUrl = comment && typeof comment.profileImageUrl === 'string' && comment.profileImageUrl.trim()
+                ? escapeHtml(comment.profileImageUrl.trim())
+                : 'img/profilo.jpg';
             return `
                 <div class="detail-comments-item">
                     <div class="detail-comments-item__header">
                         <div class="detail-comments-item__identity">
-                            <img src="img/profilo.jpg" alt="Profilo utente" class="detail-comments-item__avatar" />
+                            <img src="${profileImageUrl}" alt="Profilo utente" class="detail-comments-item__avatar" />
                             <span class="detail-comments-item__user">${userName}</span>
                         </div>
                         <span class="detail-comments-item__date">${createdAt}</span>
@@ -2596,6 +3259,7 @@ async function showDetailScreen(mediaItem, mediaIndex) {
         : `<img src="${sourceUrl}" alt="Dettaglio media" />`;
 
     const uploaderName = getMediaUploaderName(mediaItem);
+    const uploaderProfileImageUrl = getMediaUploaderProfileImageUrl(mediaItem) || 'img/profilo.jpg';
     const mediaCode = getMediaCode(mediaItem);
     const mediaUploadedAt = mediaItem.createdAt || mediaItem.uploadedAt || mediaItem.date || mediaItem.dataCaricamento || '';
     const mediaUploadedAtLabel = mediaUploadedAt ? formatItalianDate(mediaUploadedAt) : 'Data non disponibile';
@@ -2611,7 +3275,7 @@ async function showDetailScreen(mediaItem, mediaIndex) {
     detailScreen.innerHTML = `
         <div class="detail-header">
             <div class="detail-user">
-                <img src="img/profilo.jpg" alt="Profilo utente" class="detail-user-avatar" />
+                <img src="${uploaderProfileImageUrl}" alt="Profilo utente" class="detail-user-avatar" />
                 <div class="detail-user-meta">
                     <span class="detail-user-name">${uploaderName}</span>
                     <span class="detail-user-datetime">${mediaUploadedAtLabel}</span>
@@ -2781,6 +3445,7 @@ function hideAllPanels() {
     document.getElementById('upload-screen').style.display = 'none';
     document.getElementById('detail-screen').style.display = 'none';
     document.getElementById('guestbook-screen').style.display = 'none';
+    document.getElementById('profile-screen').style.display = 'none';
 }
 
 
@@ -2911,7 +3576,7 @@ async function handleUploadSelectedFiles() {
         await uploadMedia(selectedFiles, localStorage.getItem('userName'));
         selectedFiles = [];
         renderSelectedFilesGrid();
-        showMessage('File caricati con successo.');
+        showMessage('Files caricati con successo.');
 
         // Reset dello stato della Grid e dello Slideshow
         resetGridPaginationState();
