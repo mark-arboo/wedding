@@ -73,13 +73,13 @@
             <h1 class="login-title">Matrimonio </h1>
             <p class="login-subtitle">Daniela &amp; Marco</p>
           </div>
-       
+       <!-- 
           <div id="signout" onclick="showLoginPanel()">
             <i class="fa fa-arrow-left" aria-hidden="true"></i>
           </div>
-       
-          <button id="slideshow-uploadBtn" type="button" onclick="showUploadPanel()">
-            <i class="fa fa-plus-circle" aria-hidden="true"></i> Aggiungi all'album
+       -->
+          <button id="slideshow-uploadBtn" type="button" onclick="showUploadPanel()" aria-label="Aggiungi all'album" title="Aggiungi all'album">
+            <i class="fa fa-plus" aria-hidden="true"></i>
           </button>
         </div>
 
@@ -101,6 +101,18 @@
       </div>
 
     </div> 
+
+    <!-- FEED SCREEN -->
+    <div id="feed-screen" class="app-screen">
+      <div class="feed-layout">
+        <div class="feed-header">
+          <div class="feed-heading">
+          </div>
+        </div>
+
+        <div id="feed-list" class="feed-list" aria-live="polite"></div>
+      </div>
+    </div>
 
     <!-- UPLOAD SCREEN -->
     <div id="upload-screen" class="app-screen">
@@ -132,15 +144,18 @@
     <!-- GUESTBOOK SCREEN -->
     <div id="guestbook-screen" class="app-screen">
       <div class="guestbook-layout">
-        <div class="guestbook-header">
-          <h2 class="guestbook-title">Guestbook</h2>
-        </div>
-
         <div class="guestbook-composer">
-          <textarea id="guestbook-input" class="guestbook-input" maxlength="300" rows="3" placeholder="Scrivi un messaggio per Daniela e Marco..."></textarea>
+          <div class="guestbook-composer__header">
+            <img src="img/profilo.jpg" alt="Profilo utente" class="guestbook-composer__avatar" />
+            <div class="guestbook-composer__meta">
+              <span class="guestbook-composer__title">Condividi il tuo pensiero</span>
+              <span class="guestbook-composer__subtitle">La tua dedica comparira nella bacheca.</span>
+            </div>
+          </div>
+          <textarea id="guestbook-input" class="guestbook-input" maxlength="300" rows="4" placeholder="Scrivi un augurio, un ricordo o un pensiero per gli sposi..."></textarea>
           <button id="guestbook-submit" type="button" class="guestbook-submit">
             <i class="fa fa-paper-plane" aria-hidden="true"></i>
-            Invia
+            Pubblica
           </button>
         </div>
 
@@ -158,11 +173,27 @@
       </div>
     </div>
 
+    <!-- YES/NO MODAL -->
+    <div id="yesno-modal" class="message-modal yesno-modal" role="dialog" aria-modal="true" aria-labelledby="yesno-modal-title" aria-describedby="yesno-modal-text" aria-hidden="true">
+      <div class="message-modal__content yesno-modal__content">
+        <h2 id="yesno-modal-title" class="message-modal__title">Conferma</h2>
+        <p id="yesno-modal-text" class="message-modal__text"></p>
+        <div class="yesno-modal__actions">
+          <button id="yesno-modal-no" class="message-modal__button yesno-modal__button yesno-modal__button--secondary" type="button" onclick="hideYesNoModal(false)">No</button>
+          <button id="yesno-modal-yes" class="message-modal__button yesno-modal__button yesno-modal__button--destructive" type="button" onclick="hideYesNoModal(true)">Sì</button>
+        </div>
+      </div>
+    </div>
+
     <div class="tabbar">
          <button id="gridViewBtn" class="tabButton active" onclick="showGridView()">
             <i class="fa fa-th" aria-hidden="true"></i>
             <span>Galleria</span>
          </button>
+        <button id="feedViewBtn" class="tabButton" onclick="showFeedView()">
+          <i class="fa fa-list" aria-hidden="true"></i>
+          <span>Feed</span>
+        </button>
          <button id="guestbookViewBtn" class="tabButton" onclick="showGuestbookView()">
             <i class="fa fa-book" aria-hidden="true"></i>
             <span>GuestBook</span>

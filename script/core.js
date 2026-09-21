@@ -1,8 +1,15 @@
 const SLIDESHOW_INTERVAL = 5000; // Intervallo di 5 secondi per lo slideshow
 const SLIDESHOW_NUM_IMAGES = 4; // Numero massimo di immagini da mostrare nello slideshow
 const GRID_PAGE_SIZE = 6;
+const FEED_PAGE_SIZE = 6;
 const gridFeedState = {
     media: [],
+    renderedCount: 0,
+    observer: null,
+    sentinel: null,
+    isAppending: false
+};
+const feedState = {
     renderedCount: 0,
     observer: null,
     sentinel: null,
@@ -18,6 +25,7 @@ const slideshowState = {
 const GRID_FEED_STATE_KEY = 'gridFeedState';
 const SLIDESHOW_STATE_KEY = 'slideshowState';
 const DETAIL_STATE_KEY = 'detailScreenState';
+const DETAIL_RETURN_PANEL_KEY = 'detailReturnPanel';
 const MAX_SELECTED_FILES = 4;
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const likeCache = {};
@@ -142,7 +150,7 @@ function refreshGalleryData() {
     resetGridPaginationState();
     resetSlideshow();
 
-    showGridPanel();
+    showGridPanel(true);
 }
 
 
@@ -347,7 +355,7 @@ function onFirstLoad() {
     const userName = localStorage.getItem('userName');
 
     if (userName) {
-        showGridPanel();
+        showGridPanel(true);
         return;
     } else {
         showLoginPanel();
@@ -370,7 +378,10 @@ function onPageRefresh() {
     if (lastPanel) {
         switch(lastPanel) {
             case 'grid':
-                showGridPanel();
+                showGridPanel(true);
+                break;
+            case 'feed':
+                showFeedPanel(true);
                 break;
             case 'login':
                 showLoginPanel();
@@ -516,6 +527,11 @@ function showGridView() {
     updateTabSelection('grid');
 }
 
+function showFeedView() {
+    showFeedPanel();
+    updateTabSelection('feed');
+}
+
 function showGuestbookView() {
     showGuestbookPanel();
     updateTabSelection('guestbook');
@@ -523,15 +539,61 @@ function showGuestbookView() {
 
 function updateTabSelection(activeTab) {
     const gridButton = document.getElementById('gridViewBtn');
+    const feedButton = document.getElementById('feedViewBtn');
     const guestbookButton = document.getElementById('guestbookViewBtn');
 
     if (gridButton) {
         gridButton.classList.toggle('active', activeTab === 'grid');
     }
 
+    if (feedButton) {
+        feedButton.classList.toggle('active', activeTab === 'feed');
+    }
+
     if (guestbookButton) {
         guestbookButton.classList.toggle('active', activeTab === 'guestbook');
     }
+}
+
+function getDetailReturnPanel() {
+    const savedPanel = sessionStorage.getItem(DETAIL_RETURN_PANEL_KEY);
+    return savedPanel === 'feed' || savedPanel === 'grid' || savedPanel === 'guestbook' ? savedPanel : 'grid';
+}
+
+function closeDetailScreen() {
+    const returnPanel = getDetailReturnPanel();
+
+    if (returnPanel === 'feed') {
+        showFeedPanel();
+        return;
+    }
+
+    if (returnPanel === 'guestbook') {
+        showGuestbookPanel();
+        return;
+    }
+
+    showGridPanel();
+}
+
+function showPanelByName(panelName, forceReload = false) {
+    if (panelName === 'feed') {
+        return showFeedPanel(forceReload);
+    }
+
+    if (panelName === 'guestbook') {
+        return showGuestbookPanel();
+    }
+
+    if (panelName === 'login') {
+        return showLoginPanel();
+    }
+
+    if (panelName === 'grid') {
+        return showGridPanel(forceReload);
+    }
+
+    return showGridPanel(forceReload);
 }
 
 function toggleTabBar(isVisible) {
@@ -620,7 +682,7 @@ function handleLoginSubmit() {
     const savedUserName = localStorage.getItem('userName');
 
     if (savedUserName && savedUserName.toLowerCase() === userName.toLowerCase()) {
-        showGridPanel();
+        showGridPanel(true);
         return;
     }
 
@@ -684,6 +746,51 @@ function showMessage(message) {
     }
 }
 
+let yesNoModalResolver = null;
+
+function showYesNoModal(message, title) {
+    const modal = document.getElementById('yesno-modal');
+    const modalTitle = document.getElementById('yesno-modal-title');
+    const modalText = document.getElementById('yesno-modal-text');
+    const yesButton = document.getElementById('yesno-modal-yes');
+
+    if (!modal || !modalTitle || !modalText) {
+        return Promise.resolve(false);
+    }
+
+    if (yesNoModalResolver) {
+        yesNoModalResolver(false);
+        yesNoModalResolver = null;
+    }
+
+    modalTitle.textContent = title || 'Conferma';
+    modalText.textContent = message || 'Vuoi continuare?';
+    modal.classList.add('is-visible');
+    modal.setAttribute('aria-hidden', 'false');
+
+    if (yesButton) {
+        yesButton.focus();
+    }
+
+    return new Promise(function(resolve) {
+        yesNoModalResolver = resolve;
+    });
+}
+
+function hideYesNoModal(confirmed) {
+    const modal = document.getElementById('yesno-modal');
+
+    if (modal) {
+        modal.classList.remove('is-visible');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    if (yesNoModalResolver) {
+        yesNoModalResolver(Boolean(confirmed));
+        yesNoModalResolver = null;
+    }
+}
+
 function hideMessage() {
     const modal = document.getElementById('message-modal');
     if (!modal) {
@@ -700,21 +807,28 @@ function generateToken(userName) {
     return `${userName.toLowerCase()}-${timestamp}-${randomNum}`;
 }
 
-async function showGridPanel() {
+async function showGridPanel(forceReload = false) {
 
     hideAllPanels();
     document.getElementById('grid-screen').style.display = 'block';
+    updateTabSelection('grid');
     toggleTabBar(true);
 
     ptrIndicator = document.getElementById('ptr-indicator');
     ptrText = document.getElementById('ptr-text');
 
     const feedContainer = document.getElementById('feed');
+
+    if (forceReload) {
+        resetGridPaginationState();
+        resetSlideshow();
+    }
     
     await ensureLikedMediaIdsForCurrentUser();
 
-    if (tryRestoreGridPanelFromSession(feedContainer)) {
+    if (!forceReload && tryRestoreGridPanelFromSession(feedContainer)) {
         sessionStorage.setItem('lastActivePanel', 'grid');
+        updateTabSelection('grid');
         console.log("Grid panel restored from sessionStorage.");
         return;
     }
@@ -790,6 +904,119 @@ async function showGridPanel() {
 
 }
 
+async function showFeedPanel(forceReload = false) {
+    hideAllPanels();
+    document.getElementById('feed-screen').style.display = 'block';
+    toggleTabBar(true);
+
+    const feedContainer = document.getElementById('feed-list');
+
+    await ensureLikedMediaIdsForCurrentUser();
+
+    feedState.renderedCount = 0;
+    feedState.isAppending = false;
+
+    if (!forceReload && Array.isArray(gridFeedState.media) && gridFeedState.media.length > 0 && feedContainer) {
+        try {
+            const bulkLikeSummary = await getBulkLikes();
+            syncLikeSummaryForMedia(gridFeedState.media, bulkLikeSummary);
+        } catch (error) {
+            console.warn('Impossibile caricare il riepilogo bulk dei like:', error);
+        }
+
+        try {
+            const bulkCommentSummary = await getBulkComments();
+            syncCommentSummaryForMedia(gridFeedState.media, bulkCommentSummary);
+        } catch (error) {
+            console.warn('Impossibile caricare il riepilogo bulk dei commenti:', error);
+        }
+
+        renderFeedPanelFromMedia(feedContainer);
+        sessionStorage.setItem('lastActivePanel', 'feed');
+        updateTabSelection('feed');
+        return;
+    }
+
+    if (!forceReload) {
+        const sessionStates = readAppStatesFromSession();
+        if (sessionStates && applyStatesFromSession(sessionStates) && Array.isArray(gridFeedState.media) && gridFeedState.media.length > 0 && feedContainer) {
+            try {
+                const bulkLikeSummary = await getBulkLikes();
+                syncLikeSummaryForMedia(gridFeedState.media, bulkLikeSummary);
+            } catch (error) {
+                console.warn('Impossibile caricare il riepilogo bulk dei like:', error);
+            }
+
+            try {
+                const bulkCommentSummary = await getBulkComments();
+                syncCommentSummaryForMedia(gridFeedState.media, bulkCommentSummary);
+            } catch (error) {
+                console.warn('Impossibile caricare il riepilogo bulk dei commenti:', error);
+            }
+
+            renderFeedPanelFromMedia(feedContainer);
+            sessionStorage.setItem('lastActivePanel', 'feed');
+            updateTabSelection('feed');
+            return;
+        }
+    }
+
+    console.log('Richiesta dati per il feed al server...');
+
+    if (feedContainer) {
+        feedContainer.innerHTML = "<div class='grid-loading'><span class='loading-spinner' aria-label='Caricamento in corso'></span></div>";
+    }
+
+    try {
+        const data = await loadImages();
+
+        if (!Array.isArray(data) || !feedContainer) {
+            sessionStorage.setItem('lastActivePanel', 'feed');
+            updateTabSelection('feed');
+            return;
+        }
+
+        if (data.length === 0) {
+            showMessage('Nessun elemento presente nella galleria.');
+            feedContainer.innerHTML = "<p style='text-align:center;'></p>";
+            sessionStorage.setItem('lastActivePanel', 'feed');
+            updateTabSelection('feed');
+            return;
+        }
+
+        const mediaItems = Array.isArray(data) ? data : [];
+
+        try {
+            const bulkLikeSummary = await getBulkLikes();
+            syncLikeSummaryForMedia(mediaItems, bulkLikeSummary);
+        } catch (error) {
+            console.warn('Impossibile caricare il riepilogo bulk dei like:', error);
+        }
+
+        try {
+            const bulkCommentSummary = await getBulkComments();
+            syncCommentSummaryForMedia(mediaItems, bulkCommentSummary);
+        } catch (error) {
+            console.warn('Impossibile caricare il riepilogo bulk dei commenti:', error);
+        }
+
+        gridFeedState.media = mediaItems;
+        gridFeedState.renderedCount = 0;
+        renderFeedPanelFromMedia(feedContainer);
+        saveAppStatesToSession();
+    } catch (error) {
+        console.error('Errore in showFeedPanel: ', error.message);
+        showMessage(error.message || 'Impossibile caricare il feed.');
+
+        if (feedContainer) {
+            feedContainer.innerHTML = "<p style='text-align:center; color:red;'></p>";
+        }
+    }
+
+    sessionStorage.setItem('lastActivePanel', 'feed');
+    updateTabSelection('feed');
+}
+
 
 function resetGridPaginationState() {
     if (gridFeedState.observer) {
@@ -816,6 +1043,43 @@ function resetSlideshow() {
     slideshowState.timerId = null;
     slideshowState.imageUrls = [];
     slideshowState.currentIndex = 0;
+    saveSlideshowStateToSession();
+}
+
+function removeMediaFromClientState(mediaItemOrCode) {
+    const mediaCode = String(
+        typeof mediaItemOrCode === 'string'
+            ? mediaItemOrCode
+            : getMediaCode(mediaItemOrCode)
+    ).trim();
+
+    if (!mediaCode) {
+        return;
+    }
+
+    const deletedThumbnailUrl = typeof mediaItemOrCode === 'object' && mediaItemOrCode
+        ? getThumbnailMediaImageUrl(mediaItemOrCode)
+        : '';
+
+    gridFeedState.media = Array.isArray(gridFeedState.media)
+        ? gridFeedState.media.filter(function(item) {
+            return String(getMediaCode(item)) !== mediaCode;
+        })
+        : [];
+
+    gridFeedState.renderedCount = Math.min(gridFeedState.renderedCount, gridFeedState.media.length);
+
+    if (deletedThumbnailUrl && Array.isArray(slideshowState.imageUrls)) {
+        slideshowState.imageUrls = slideshowState.imageUrls.filter(function(url) {
+            return String(url) !== deletedThumbnailUrl;
+        });
+    }
+
+    if (slideshowState.currentIndex >= slideshowState.imageUrls.length) {
+        slideshowState.currentIndex = slideshowState.imageUrls.length > 0 ? 0 : 0;
+    }
+
+    saveGridFeedStateToSession();
     saveSlideshowStateToSession();
 }
 
@@ -961,6 +1225,200 @@ function bindGridItemClicks(feedContainer) {
     });
 }
 
+function createFeedItemMarkup(item, index) {
+    const mediaUrl = getThumbnailMediaImageUrl(item) || 'img/no-image.jpg';
+    const isVideo = item && item.mimeType && item.mimeType.startsWith('video/');
+    const uploaderName = escapeHtml(getMediaUploaderName(item));
+    const mediaCode = getMediaCode(item);
+    const mediaUploadedAt = item.createdAt || item.uploadedAt || item.date || item.dataCaricamento || '';
+    const mediaUploadedAtLabel = mediaUploadedAt ? formatItalianDate(mediaUploadedAt) : 'Data non disponibile';
+    const safeMediaCode = escapeHtml(String(mediaCode || ''));
+    const initialLikeCount = getLikeCountByCode(mediaCode) || Number(item.likeCount || item.likes || 0) || 0;
+    const initialCommentCount = getCommentCountByCode(mediaCode) || Number(item.commentCount || item.comments || 0) || 0;
+    const canManageMedia = canCurrentUserManageMedia();
+
+    return `
+        <article class="feed-card" data-media-index="${index}" data-media-code="${safeMediaCode}">
+            <div class="feed-card__header">
+                <div class="feed-card__user">
+                    <img src="img/profilo.jpg" alt="Profilo utente" class="feed-card__avatar" />
+                    <div class="feed-card__user-meta">
+                        <span class="feed-card__uploader">${uploaderName}</span>
+                        <span class="feed-card__datetime">${mediaUploadedAtLabel}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="feed-card__media">
+                <img src="${mediaUrl}" alt="${uploaderName}" loading="lazy" />
+                ${isVideo ? `
+                    <div class="feed-video-overlay" aria-hidden="true">
+                        <span class="feed-video-play"></span>
+                    </div>
+                ` : ''}
+            </div>
+            <div class="feed-card__footer">
+                <div class="feed-card__actions" aria-label="Azioni media">
+                    <div class="feed-action-group feed-action-group--like">
+                        <button type="button" class="feed-action feed-action--like" data-feed-action="like" data-liked="${item.isLiked || item.liked ? 'true' : 'false'}" aria-label="Mi piace" aria-pressed="${item.isLiked || item.liked ? 'true' : 'false'}">
+                            <i class="fa fa-heart-o" aria-hidden="true"></i>
+                        </button>
+                        <span class="feed-action-count feed-action-count--likes" data-count="${initialLikeCount}">${initialLikeCount}</span>
+                    </div>
+                    <div class="feed-action-group feed-action-group--comment">
+                        <button type="button" class="feed-action feed-action--comment" data-feed-action="comment" aria-label="Commenti">
+                            <i class="fa fa-comment-o" aria-hidden="true"></i>
+                        </button>
+                        <span class="feed-action-count feed-action-count--comments" data-count="${initialCommentCount}">${initialCommentCount}</span>
+                    </div>
+                    ${canManageMedia ? `
+                        <button type="button" class="feed-action feed-action--download" data-feed-action="download" data-download-url="${escapeHtml(String(item.originalUrl || item.src || item.previewUrl || item.thumbnailUrl || ''))}" aria-label="Scarica media">
+                            <i class="fa fa-download" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="feed-action feed-action--delete" data-feed-action="delete" aria-label="Cancella media">
+                            <i class="fa fa-trash-o" aria-hidden="true"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </article>
+    `;
+}
+
+function bindFeedItemInteractions(feedContainer) {
+    if (!feedContainer || feedContainer._feedInteractionsBound) {
+        return;
+    }
+
+    feedContainer._feedInteractionsBound = true;
+
+    feedContainer.addEventListener('click', async function(event) {
+        const actionButton = event.target.closest('[data-feed-action]');
+
+        if (actionButton && feedContainer.contains(actionButton)) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const card = actionButton.closest('.feed-card');
+            const mediaIndex = Number(card && card.dataset ? card.dataset.mediaIndex : NaN);
+            const mediaItem = Number.isInteger(mediaIndex) ? gridFeedState.media[mediaIndex] : null;
+
+            if (!mediaItem) {
+                return;
+            }
+
+            const action = actionButton.dataset.feedAction;
+
+            if (action === 'like') {
+                if (actionButton.dataset.liked === 'true') {
+                    return;
+                }
+
+                const likeCountElement = actionButton.nextElementSibling;
+                const mediaCode = getMediaCode(mediaItem);
+                const user = localStorage.getItem('userName') || 'guest';
+                actionButton.disabled = true;
+
+                try {
+                    await addLike(mediaCode, user);
+                    saveLikedMediaForCurrentUser(mediaCode);
+
+                    const currentCount = getLikeCountByCode(mediaCode);
+                    const nextCount = currentCount + 1;
+
+                    mediaItem.likeCount = nextCount;
+                    mediaItem.likes = nextCount;
+                    mediaItem.isLiked = true;
+                    mediaItem.liked = true;
+
+                    likeCache[String(mediaCode)] = nextCount;
+                    saveLikeCacheToStorage();
+                    refreshSlideshowFromGrid();
+
+                    applyLikeVisualState(actionButton, likeCountElement, true, nextCount);
+                } catch (error) {
+                    console.error('Errore nell\'aggiunta del like dal feed:', error);
+                    showMessage('Impossibile aggiungere il like al momento.');
+                    actionButton.disabled = false;
+                }
+
+                return;
+            }
+
+            if (action === 'comment') {
+                const feedScreen = document.getElementById('feed-screen');
+                const commentCountElement = actionButton.nextElementSibling;
+                await openCommentsSheetForMedia(feedScreen, mediaItem, commentCountElement);
+                return;
+            }
+
+            if (action === 'download') {
+                const downloadUrlValue = (actionButton.dataset.downloadUrl || '').trim();
+                if (!downloadUrlValue) {
+                    actionButton.disabled = true;
+                    actionButton.title = 'Download non disponibile';
+                    return;
+                }
+
+                const safeUrl = downloadUrlValue;
+                const fileName = (mediaItem.name || safeUrl.split('/').pop() || `${mediaItem.mimeType && mediaItem.mimeType.startsWith('video/') ? 'video' : 'image'}-${Date.now()}`);
+                const link = document.createElement('a');
+                link.href = safeUrl;
+                link.download = fileName;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                return;
+            }
+
+            if (action === 'delete') {
+                const currentUser = (localStorage.getItem('userName') || '').trim().toLowerCase();
+
+                if (currentUser !== 'sposo' && currentUser !== 'sposa') {
+                    showMessage('Utente non valido.');
+                    return;
+                }
+
+                const confirmed = await showYesNoModal('Vuoi cancellare questo media? L\'operazione non si può annullare.', 'Conferma cancellazione');
+                if (!confirmed) {
+                    return;
+                }
+
+                actionButton.disabled = true;
+
+                try {
+                    await cancelMedia(currentUser, getMediaCode(mediaItem));
+                    removeMediaFromClientState(mediaItem);
+                    await showFeedPanel(true);
+                    showMessage('Media cancellato con successo.');
+                } catch (error) {
+                    console.error('Errore nella cancellazione del media dal feed:', error);
+                    showMessage(error && error.message ? error.message : 'Impossibile cancellare il media al momento.');
+                    actionButton.disabled = false;
+                }
+            }
+
+            return;
+        }
+
+        const card = event.target.closest('.feed-card');
+        if (!card || !feedContainer.contains(card)) {
+            return;
+        }
+
+        const mediaIndex = Number(card.dataset.mediaIndex);
+        if (!Number.isInteger(mediaIndex)) {
+            return;
+        }
+
+        const mediaItem = gridFeedState.media[mediaIndex];
+        if (mediaItem) {
+            showDetailScreen(mediaItem, mediaIndex);
+        }
+    });
+}
+
 function appendNextGridPage(feedContainer) {
     if (!feedContainer || gridFeedState.isAppending) {
         return;
@@ -1010,6 +1468,154 @@ function appendNextGridPage(feedContainer) {
     }
 
     gridFeedState.isAppending = false;
+}
+
+function resetFeedPaginationState() {
+    detachFeedInfiniteScroll();
+    feedState.renderedCount = 0;
+    feedState.isAppending = false;
+}
+
+function detachFeedInfiniteScroll() {
+    if (feedState.observer) {
+        feedState.observer.disconnect();
+        feedState.observer = null;
+    }
+
+    if (feedState.sentinel && feedState.sentinel.parentNode) {
+        feedState.sentinel.parentNode.removeChild(feedState.sentinel);
+    }
+
+    feedState.sentinel = null;
+}
+
+function initializeFeedCardState(card, item) {
+    if (!card || !item) {
+        return;
+    }
+
+    const mediaCode = getMediaCode(item);
+    const likeButton = card.querySelector('.feed-action--like');
+    const likeCountElement = card.querySelector('.feed-action-count--likes');
+    const commentCountElement = card.querySelector('.feed-action-count--comments');
+    const downloadButton = card.querySelector('.feed-action--download');
+
+    if (likeButton && likeCountElement) {
+        const initialLikeCount = getLikeCountByCode(mediaCode) || Number(item.likeCount || item.likes || 0) || 0;
+        const alreadyLikedByUser = isMediaLikedByCurrentUser(item);
+        applyLikeVisualState(likeButton, likeCountElement, alreadyLikedByUser || Boolean(item.isLiked || item.liked), initialLikeCount);
+    }
+
+    if (commentCountElement) {
+        const initialCommentCount = getCommentCountByCode(mediaCode) || Number(item.commentCount || item.comments || 0) || 0;
+        commentCountElement.textContent = String(initialCommentCount);
+        commentCountElement.dataset.count = String(initialCommentCount);
+    }
+
+    if (downloadButton) {
+        const downloadUrlValue = (downloadButton.dataset.downloadUrl || '').trim();
+        if (!downloadUrlValue) {
+            downloadButton.disabled = true;
+            downloadButton.title = 'Download non disponibile';
+        }
+    }
+
+    card.setAttribute('data-feed-ready', '1');
+}
+
+function appendNextFeedPage(feedContainer) {
+    if (!feedContainer || feedState.isAppending) {
+        return;
+    }
+
+    const totalItems = Array.isArray(gridFeedState.media) ? gridFeedState.media.length : 0;
+    if (feedState.renderedCount >= totalItems) {
+        if (feedState.observer) {
+            feedState.observer.disconnect();
+            feedState.observer = null;
+        }
+        return;
+    }
+
+    feedState.isAppending = true;
+
+    const start = feedState.renderedCount;
+    const end = Math.min(start + FEED_PAGE_SIZE, totalItems);
+
+    const chunkHtml = gridFeedState.media
+        .slice(start, end)
+        .map(function(item, index) {
+            return createFeedItemMarkup(item, start + index);
+        })
+        .join('');
+
+    feedContainer.insertAdjacentHTML('beforeend', chunkHtml);
+
+    const newCards = feedContainer.querySelectorAll('.feed-card:not([data-feed-ready])');
+    newCards.forEach(function(card) {
+        const cardIndex = Number(card.dataset.mediaIndex);
+        const item = Number.isInteger(cardIndex) ? gridFeedState.media[cardIndex] : null;
+        if (item) {
+            initializeFeedCardState(card, item);
+        }
+    });
+
+    bindFeedItemInteractions(feedContainer);
+
+    feedState.renderedCount = end;
+
+    if (feedState.renderedCount >= totalItems && feedState.observer) {
+        feedState.observer.disconnect();
+        feedState.observer = null;
+    }
+
+    feedState.isAppending = false;
+}
+
+function setupFeedInfiniteScroll(feedContainer) {
+    const totalItems = Array.isArray(gridFeedState.media) ? gridFeedState.media.length : 0;
+    if (!feedContainer || totalItems <= FEED_PAGE_SIZE) {
+        return;
+    }
+
+    detachFeedInfiniteScroll();
+
+    const sentinelParent = feedContainer.parentElement || feedContainer;
+    const sentinel = document.createElement('div');
+    sentinel.id = 'feed-sentinel';
+    sentinel.setAttribute('aria-hidden', 'true');
+    sentinel.style.width = '100%';
+    sentinel.style.height = '1px';
+    sentinel.style.margin = '0';
+    sentinel.style.opacity = '0';
+    sentinel.style.pointerEvents = 'none';
+    sentinelParent.appendChild(sentinel);
+
+    feedState.sentinel = sentinel;
+    feedState.observer = new IntersectionObserver(function(entries) {
+        if (entries[0] && entries[0].isIntersecting) {
+            appendNextFeedPage(feedContainer);
+        }
+    }, {
+        root: null,
+        rootMargin: '200px 0px',
+        threshold: 0.01
+    });
+
+    feedState.observer.observe(sentinel);
+}
+
+function renderFeedPanelFromMedia(feedContainer) {
+    if (!feedContainer) {
+        return;
+    }
+
+    resetFeedPaginationState();
+    feedContainer.innerHTML = '';
+    appendNextFeedPage(feedContainer);
+    setupFeedInfiniteScroll(feedContainer);
+    window.scrollTo(0, 0);
+    feedContainer.scrollTop = 0;
 }
 
 function detachGridInfiniteScroll() {
@@ -1194,6 +1800,19 @@ function getMediaCode(mediaItem) {
     }
 
     return mediaItem.codice || mediaItem.id || mediaItem.mediaId || mediaItem.code || mediaItem.name || null;
+}
+
+function getMediaUploaderName(mediaItem) {
+    if (!mediaItem) {
+        return 'Utente';
+    }
+
+    return mediaItem.user || mediaItem.username || mediaItem.uploader || mediaItem.owner || 'Utente';
+}
+
+function canCurrentUserManageMedia() {
+    const currentUserName = (localStorage.getItem('userName') || '').trim().toLowerCase();
+    return currentUserName === 'sposo' || currentUserName === 'sposa';
 }
 
 function saveDetailScreenState(mediaItem, mediaIndex) {
@@ -1714,7 +2333,7 @@ function applyLikeVisualState(button, countElement, isLiked, countValue) {
     button.dataset.liked = 'false';
     button.setAttribute('aria-pressed', 'false');
     button.classList.remove('is-liked');
-    button.style.color = '#fff';
+    button.style.color = '';
     button.innerHTML = '<i class="fa fa-heart-o" aria-hidden="true"></i>';
     button.disabled = false;
 }
@@ -1738,7 +2357,40 @@ function formatItalianDate(dateValue) {
     }).format(parsedDate);
 }
 
-function renderCommentsSheet(detailScreen, comments, mediaCode) {
+function buildCommentsListMarkup(comments) {
+    const safeComments = Array.isArray(comments) ? comments : [];
+
+    return safeComments.length > 0
+        ? safeComments.map((comment) => {
+            const userName = comment && comment.user ? String(comment.user) : 'Utente';
+            const text = comment && comment.text ? String(comment.text) : '';
+            const createdAt = formatItalianDate(comment && comment.createdAt ? comment.createdAt : '');
+            return `
+                <div class="detail-comments-item">
+                    <div class="detail-comments-item__header">
+                        <div class="detail-comments-item__identity">
+                            <img src="img/profilo.jpg" alt="Profilo utente" class="detail-comments-item__avatar" />
+                            <span class="detail-comments-item__user">${userName}</span>
+                        </div>
+                        <span class="detail-comments-item__date">${createdAt}</span>
+                    </div>
+                    <p class="detail-comments-item__text">${text}</p>
+                </div>
+            `;
+        }).join('')
+        : '<div class="detail-comments-empty">Nessun commento ancora.</div>';
+}
+
+function updateCommentCountDisplay(countElement, nextCount) {
+    if (!countElement) {
+        return;
+    }
+
+    countElement.textContent = String(nextCount);
+    countElement.dataset.count = String(nextCount);
+}
+
+function renderCommentsSheet(detailScreen, comments, mediaCode, options = {}) {
     const existingBackdrop = detailScreen.querySelector('.detail-comments-backdrop');
     const existingSheet = detailScreen.querySelector('.detail-comments-sheet');
 
@@ -1759,23 +2411,7 @@ function renderCommentsSheet(detailScreen, comments, mediaCode) {
     sheet.setAttribute('role', 'dialog');
     sheet.setAttribute('aria-label', 'Lista commenti');
 
-    const safeComments = Array.isArray(comments) ? comments : [];
-    const listMarkup = safeComments.length > 0
-        ? safeComments.map((comment) => {
-            const userName = comment && comment.user ? String(comment.user) : 'Utente';
-            const text = comment && comment.text ? String(comment.text) : '';
-            const createdAt = formatItalianDate(comment && comment.createdAt ? comment.createdAt : '');
-            return `
-                <div class="detail-comments-item">
-                    <div class="detail-comments-item__header">
-                        <span class="detail-comments-item__user">${userName}</span>
-                        <span class="detail-comments-item__date">${createdAt}</span>
-                    </div>
-                    <p class="detail-comments-item__text">${text}</p>
-                </div>
-            `;
-        }).join('')
-        : '<div class="detail-comments-empty">Nessun commento ancora.</div>';
+    const listMarkup = buildCommentsListMarkup(comments);
 
     sheet.innerHTML = `
         <div class="detail-comments-sheet__handle"></div>
@@ -1786,12 +2422,24 @@ function renderCommentsSheet(detailScreen, comments, mediaCode) {
             </button>
         </div>
         <div class="detail-comments-sheet__list">${listMarkup}</div>
+        <div class="detail-comments-sheet__composer" aria-label="Aggiungi commento">
+            <textarea class="detail-comments-sheet__input" maxlength="200" rows="1" placeholder="Aggiungi un commento..." aria-label="Scrivi un commento"></textarea>
+            <button type="button" class="detail-comments-sheet__submit" aria-label="Invia commento">
+                <i class="fa fa-paper-plane" aria-hidden="true"></i>
+            </button>
+        </div>
     `;
 
     detailScreen.appendChild(backdrop);
     detailScreen.appendChild(sheet);
 
     const closeButton = sheet.querySelector('.detail-comments-sheet__close');
+    const listElement = sheet.querySelector('.detail-comments-sheet__list');
+    const commentInput = sheet.querySelector('.detail-comments-sheet__input');
+    const commentSubmitButton = sheet.querySelector('.detail-comments-sheet__submit');
+    const mediaItem = options.mediaItem || null;
+    const commentCountElement = options.commentCountElement || null;
+
     if (closeButton) {
         closeButton.addEventListener('click', () => {
             backdrop.classList.remove('is-visible');
@@ -1807,6 +2455,66 @@ function renderCommentsSheet(detailScreen, comments, mediaCode) {
         closeButton && closeButton.click();
     });
 
+    if (commentInput && commentSubmitButton && mediaCode) {
+        commentInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                commentSubmitButton.click();
+            }
+        });
+
+        commentSubmitButton.addEventListener('click', async function() {
+            const commentText = commentInput.value.trim();
+            if (!commentText) {
+                commentInput.focus();
+                showMessage('Scrivi un commento prima di inviare.');
+                return;
+            }
+
+            if (commentText.length > 200) {
+                showMessage('Il commento può contenere al massimo 200 caratteri.');
+                commentInput.focus();
+                return;
+            }
+
+            const user = localStorage.getItem('userName') || 'guest';
+            commentSubmitButton.disabled = true;
+
+            try {
+                await addComment(mediaCode, user, commentText);
+
+                const currentCount = getCommentCountByCode(mediaCode);
+                const nextCount = currentCount + 1;
+
+                clearCommentListCacheForCode(mediaCode);
+
+                if (mediaItem) {
+                    mediaItem.commentCount = nextCount;
+                    mediaItem.comments = nextCount;
+                }
+
+                commentCache[String(mediaCode)] = nextCount;
+                sessionStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(commentCache));
+                updateCommentCountDisplay(commentCountElement, nextCount);
+
+                const refreshedComments = await getCommentsByCodice(mediaCode);
+                setCachedCommentsByCode(mediaCode, refreshedComments);
+
+                if (listElement) {
+                    listElement.innerHTML = buildCommentsListMarkup(refreshedComments);
+                }
+
+                commentInput.value = '';
+                commentInput.focus();
+            } catch (error) {
+                console.error('Errore nell\'aggiunta del commento:', error);
+                showMessage('Impossibile aggiungere il commento al momento.');
+            } finally {
+                commentSubmitButton.disabled = false;
+            }
+        });
+    }
+
     requestAnimationFrame(() => {
         backdrop.classList.add('is-visible');
         sheet.classList.add('is-open');
@@ -1815,14 +2523,61 @@ function renderCommentsSheet(detailScreen, comments, mediaCode) {
     return sheet;
 }
 
-function showDetailScreen(mediaItem, mediaIndex) {
+async function openCommentsSheetForMedia(container, mediaItem, commentCountElement) {
+    const mediaCode = getMediaCode(mediaItem);
+
+    if (!container || !mediaCode) {
+        return;
+    }
+
+    try {
+        const cachedComments = getCachedCommentsByCode(mediaCode);
+        if (Array.isArray(cachedComments)) {
+            console.debug('[api] usa cache commenti per codice', mediaCode, 'numero commenti:', cachedComments.length);
+            renderCommentsSheet(container, cachedComments, mediaCode, { mediaItem, commentCountElement });
+            return;
+        }
+
+        console.debug('[api] richiesta backend commenti per codice', mediaCode);
+        const comments = await getCommentsByCodice(mediaCode);
+        setCachedCommentsByCode(mediaCode, comments);
+        renderCommentsSheet(container, comments, mediaCode, { mediaItem, commentCountElement });
+    } catch (error) {
+        console.error('Errore nel recupero dei commenti:', error);
+        renderCommentsSheet(container, [], mediaCode, { mediaItem, commentCountElement });
+        showMessage('Impossibile caricare i commenti al momento.');
+    }
+}
+
+async function showDetailScreen(mediaItem, mediaIndex) {
     const detailScreen = document.getElementById('detail-screen');
     if (!detailScreen || !mediaItem) {
         return;
     }
 
+    const mediaCollectionForCounts = Array.isArray(gridFeedState.media) && gridFeedState.media.length > 0
+        ? gridFeedState.media
+        : [mediaItem];
+
+    try {
+        const bulkLikeSummary = await getBulkLikes();
+        syncLikeSummaryForMedia(mediaCollectionForCounts, bulkLikeSummary);
+    } catch (error) {
+        console.warn('Impossibile caricare il riepilogo bulk dei like:', error);
+    }
+
+    try {
+        const bulkCommentSummary = await getBulkComments();
+        syncCommentSummaryForMedia(mediaCollectionForCounts, bulkCommentSummary);
+    } catch (error) {
+        console.warn('Impossibile caricare il riepilogo bulk dei commenti:', error);
+    }
+
+    const returnPanel = sessionStorage.getItem('lastActivePanel') || 'grid';
+
     hideAllPanels();
     toggleTabBar(false);
+    sessionStorage.setItem(DETAIL_RETURN_PANEL_KEY, returnPanel);
     sessionStorage.setItem('lastActivePanel', 'detail');
     saveDetailScreenState(mediaItem, mediaIndex);
     detailScreen.style.display = 'block';
@@ -1840,11 +2595,14 @@ function showDetailScreen(mediaItem, mediaIndex) {
         ? `<video src="${sourceUrl}" controls playsinline autoplay muted></video>`
         : `<img src="${sourceUrl}" alt="Dettaglio media" />`;
 
-    const uploaderName = mediaItem.user || 'Utente';
+    const uploaderName = getMediaUploaderName(mediaItem);
     const mediaCode = getMediaCode(mediaItem);
+    const mediaUploadedAt = mediaItem.createdAt || mediaItem.uploadedAt || mediaItem.date || mediaItem.dataCaricamento || '';
+    const mediaUploadedAtLabel = mediaUploadedAt ? formatItalianDate(mediaUploadedAt) : 'Data non disponibile';
     const initialLikeCount = getLikeCountByCode(mediaCode) || Number(mediaItem.likeCount || mediaItem.likes || 0) || 0;
     const initialCommentCount = getCommentCountByCode(mediaCode) || Number(mediaItem.commentCount || mediaItem.comments || 0) || 0;
     const alreadyLikedByUser = isMediaLikedByCurrentUser(mediaItem);
+    const canManageMedia = canCurrentUserManageMedia();
 
     const mediaWrapper = document.createElement('div');
     mediaWrapper.className = 'detail-media-wrapper is-transitioning';
@@ -1854,9 +2612,12 @@ function showDetailScreen(mediaItem, mediaIndex) {
         <div class="detail-header">
             <div class="detail-user">
                 <img src="img/profilo.jpg" alt="Profilo utente" class="detail-user-avatar" />
-                <span class="detail-user-name">${uploaderName}</span>
+                <div class="detail-user-meta">
+                    <span class="detail-user-name">${uploaderName}</span>
+                    <span class="detail-user-datetime">${mediaUploadedAtLabel}</span>
+                </div>
             </div>
-            <button type="button" class="detail-close" onclick="showGridPanel()" aria-label="Chiudi dettaglio">
+            <button type="button" class="detail-close" onclick="closeDetailScreen()" aria-label="Chiudi dettaglio">
                 <i class="fa fa-times" aria-hidden="true"></i>
             </button>
         </div>
@@ -1876,18 +2637,20 @@ function showDetailScreen(mediaItem, mediaIndex) {
                 </button>
                 <span class="detail-action-count detail-action-count--comments" data-count="${initialCommentCount}">${initialCommentCount}</span>
             </div>
+            ${canManageMedia ? `
             <div class="detail-action-group">
                 <button type="button" class="detail-action detail-action--download" data-download-url="${downloadUrl}" aria-label="Scarica media">
                     <i class="fa fa-download" aria-hidden="true"></i>
                 </button>
             </div>
+            <div class="detail-action-group">
+                <button type="button" class="detail-action detail-action--cancel" aria-label="Cancella media">
+                    <i class="fa fa-trash-o" aria-hidden="true"></i>
+                </button>
+            </div>
+            ` : ''}
         </div>
-        <div class="detail-comment-composer" aria-label="Aggiungi commento">
-            <textarea class="detail-comment-input" maxlength="200" rows="1" placeholder="Aggiungi un commento..." aria-label="Scrivi un commento"></textarea>
-            <button type="button" class="detail-comment-submit" aria-label="Invia commento">
-                <i class="fa fa-paper-plane" aria-hidden="true"></i>
-            </button>
-        </div>
+        <div class="detail-navigation-hint" aria-hidden="true">Scorri in alto o in basso per il prossimo media</div>
     `);
 
     const likeButton = detailScreen.querySelector('.detail-action--like');
@@ -1895,28 +2658,11 @@ function showDetailScreen(mediaItem, mediaIndex) {
     const commentButton = detailScreen.querySelector('.detail-action--comment');
     const commentCountElement = detailScreen.querySelector('.detail-action-count--comments');
     const downloadButton = detailScreen.querySelector('.detail-action--download');
-    const commentInput = detailScreen.querySelector('.detail-comment-input');
-    const commentSubmitButton = detailScreen.querySelector('.detail-comment-submit');
+    const cancelButton = detailScreen.querySelector('.detail-action--cancel');
 
     if (commentButton && mediaCode) {
         commentButton.addEventListener('click', async function() {
-            try {
-                const cachedComments = getCachedCommentsByCode(mediaCode);
-                if (Array.isArray(cachedComments)) {
-                    console.debug('[api] usa cache commenti per codice', mediaCode, 'numero commenti:', cachedComments.length);
-                    renderCommentsSheet(detailScreen, cachedComments, mediaCode);
-                    return;
-                }
-
-                console.debug('[api] richiesta backend commenti per codice', mediaCode);
-                const comments = await getCommentsByCodice(mediaCode);
-                setCachedCommentsByCode(mediaCode, comments);
-                renderCommentsSheet(detailScreen, comments, mediaCode);
-            } catch (error) {
-                console.error('Errore nel recupero dei commenti:', error);
-                renderCommentsSheet(detailScreen, [], mediaCode);
-                showMessage('Impossibile caricare i commenti al momento.');
-            }
+            await openCommentsSheetForMedia(detailScreen, mediaItem, commentCountElement);
         });
     }
 
@@ -1979,53 +2725,32 @@ function showDetailScreen(mediaItem, mediaIndex) {
         }
     }
 
-    if (commentInput && commentSubmitButton && commentCountElement && mediaCode) {
-        commentInput.addEventListener('keydown', function(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                commentSubmitButton.click();
-            }
-        });
+    if (cancelButton && mediaCode) {
+        cancelButton.addEventListener('click', async function() {
+            const currentUser = (localStorage.getItem('userName') || '').trim().toLowerCase();
 
-        commentSubmitButton.addEventListener('click', async function() {
-            const commentText = commentInput.value.trim();
-            if (!commentText) {
-                commentInput.focus();
-                showMessage('Scrivi un commento prima di inviare.');
+            if (currentUser !== 'sposo' && currentUser !== 'sposa') {
+                showMessage('Utente non valido.');
                 return;
             }
 
-            if (commentText.length > 200) {
-                showMessage('Il commento può contenere al massimo 200 caratteri.');
-                commentInput.focus();
+            const confirmed = await showYesNoModal('Vuoi cancellare questo media? L\'operazione non si può annullare.', 'Conferma cancellazione');
+            if (!confirmed) {
                 return;
             }
 
-            const user = localStorage.getItem('userName') || 'guest';
-            commentSubmitButton.disabled = true;
+            cancelButton.disabled = true;
 
             try {
-                await addComment(mediaCode, user, commentText);
-
-                const currentCount = getCommentCountByCode(mediaCode);
-                const nextCount = currentCount + 1;
-
-                clearCommentListCacheForCode(mediaCode);
-
-                mediaItem.commentCount = nextCount;
-                mediaItem.comments = nextCount;
-                commentCache[String(mediaCode)] = nextCount;
-                sessionStorage.setItem(COMMENT_SUMMARY_STORAGE_KEY, JSON.stringify(commentCache));
-
-                commentCountElement.textContent = String(nextCount);
-                commentCountElement.dataset.count = String(nextCount);
-                commentInput.value = '';
-                commentInput.focus();
+                await cancelMedia(currentUser, mediaCode);
+                removeMediaFromClientState(mediaItem);
+                sessionStorage.removeItem(DETAIL_STATE_KEY);
+                await showPanelByName(getDetailReturnPanel(), true);
+                showMessage('Media cancellato con successo.');
             } catch (error) {
-                console.error('Errore nell\'aggiunta del commento:', error);
-                showMessage('Impossibile aggiungere il commento al momento.');
-            } finally {
-                commentSubmitButton.disabled = false;
+                console.error('Errore nella cancellazione del media:', error);
+                showMessage(error && error.message ? error.message : 'Impossibile cancellare il media al momento.');
+                cancelButton.disabled = false;
             }
         });
     }
@@ -2048,9 +2773,11 @@ function showUploadPanel() {
 function hideAllPanels() {
     // Evita accumulo observer/sentinel al cambio pannello.
     detachGridInfiniteScroll();
+    detachFeedInfiniteScroll();
 
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('grid-screen').style.display = 'none';
+    document.getElementById('feed-screen').style.display = 'none';
     document.getElementById('upload-screen').style.display = 'none';
     document.getElementById('detail-screen').style.display = 'none';
     document.getElementById('guestbook-screen').style.display = 'none';
@@ -2063,7 +2790,7 @@ function login(username, token) {
     return glogin(username, token)
         .then(() => {
             console.log("Login riuscito per utente:", username);
-            showGridPanel();
+            showGridPanel(true);
         })
         .catch((error) => {
             console.error("Errore durante il login:", error.message);
@@ -2190,7 +2917,7 @@ async function handleUploadSelectedFiles() {
         resetGridPaginationState();
         resetSlideshow();
         
-        showGridPanel();
+        showGridPanel(true);
     } catch (error) {
         const uploadError = error && error.message ? error.message : 'Errore durante il caricamento dei file.';
         showMessage(uploadError);

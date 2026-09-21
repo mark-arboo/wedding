@@ -388,3 +388,41 @@ async function readGuestbookMessages() {
         throw new Error(err && err.message ? err.message : "Errore durante il recupero dei messaggi del guestbook.");
     }
 }
+
+
+// API per la cancellazione logica di un media
+async function cancelMedia(user, codice) {
+
+    if (!user) {
+        throw new Error("Utente non valido.");
+    }
+
+    if (!codice || !String(codice).trim()) {
+        throw new Error("Codice non valido.");
+    }
+
+    const payload = {
+        user: user,
+        codice: codice
+    };
+
+    const response = await fetch(`${API_URL}/api/v1/media/cancel`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "wedding-token": WEDDING_TOKEN
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+
+    if (result && result.status === "SUCCESS_STATUS") {
+        return true;
+    }
+
+    throw new Error(result && result.message ? result.message : "Errore durante la cancellazione del media.");
+
+}
+
+
