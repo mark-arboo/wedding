@@ -4,7 +4,6 @@ const GRID_PAGE_SIZE = 6;
 const FEED_PAGE_SIZE = 6;
 const gridFeedState = {
     media: [],
-    profileImageUrl: {},
     renderedCount: 0,
     observer: null,
     sentinel: null,
@@ -220,7 +219,6 @@ document.addEventListener('DOMContentLoaded', function() {
 function getSerializableGridFeedState() {
     return {
         media: Array.isArray(gridFeedState.media) ? gridFeedState.media : [],
-        profileImageUrl: gridFeedState.profileImageUrl && typeof gridFeedState.profileImageUrl === 'object' ? gridFeedState.profileImageUrl : {},
         renderedCount: Number.isFinite(gridFeedState.renderedCount) ? gridFeedState.renderedCount : 0,
         isAppending: false
     };
@@ -293,7 +291,6 @@ function applyStatesFromSession(sessionStates) {
     }
 
     gridFeedState.media = sessionStates.grid.media;
-    gridFeedState.profileImageUrl = buildGridFeedProfileImageIndex(gridFeedState.media);
     gridFeedState.renderedCount = 0;
     gridFeedState.isAppending = false;
 
@@ -485,6 +482,17 @@ function renderGuestbookMessages(messages) {
     }).join('');
 }
 
+function updateGuestbookComposerAvatar() {
+    const avatarElement = document.getElementById('guestbook-composer-avatar');
+
+    if (!avatarElement) {
+        return;
+    }
+
+    const profileImageUrl = getUserProfileImage();
+    avatarElement.src = profileImageUrl || 'img/profilo.jpg';
+}
+
 async function loadGuestbookMessages() {
     try {
         const messages = await readGuestbookMessages();
@@ -540,6 +548,7 @@ function showGuestbookPanel() {
     guestbookScreen.style.display = 'block';
     toggleTabBar(true);
     updateTabSelection('guestbook');
+    updateGuestbookComposerAvatar();
 
     const submitButton = document.getElementById('guestbook-submit');
     if (submitButton) {
@@ -712,17 +721,76 @@ function saveUserProfileImage(imageUrl) {
     localStorage.removeItem(USER_PROFILE_IMAGE_STORAGE_KEY);
 }
 
-function renderProfilePanel() {
+function getCurrentUserName() {
+    return (localStorage.getItem('userName') || '').trim();
+}
+
+async function resolveProfilePanelData() {
+    const savedProfileImageUrl = getUserProfileImage();
+    const savedUserName = getCurrentUserName();
+
+    if (savedProfileImageUrl) {
+        return {
+            userName: savedUserName || 'Utente',
+            profileImageUrl: savedProfileImageUrl
+        };
+    }
+
+    if (!savedUserName) {
+        return {
+            userName: 'Utente',
+            profileImageUrl: ''
+        };
+    }
+
+    try {
+        const userData = await getUser(savedUserName);
+        const resolvedUserName = userData && typeof userData.user === 'string' && userData.user.trim()
+            ? userData.user.trim()
+            : savedUserName;
+        const profileImageUrl = userData && typeof userData.profileImageUrl === 'string'
+            ? userData.profileImageUrl.trim()
+            : '';
+
+        if (profileImageUrl) {
+            saveUserProfileImage(profileImageUrl);
+        }
+
+        return {
+            userName: resolvedUserName || 'Utente',
+            profileImageUrl: profileImageUrl || ''
+        };
+    } catch (error) {
+        console.warn('Impossibile recuperare i dati del profilo dal server:', error);
+        return {
+            userName: savedUserName || 'Utente',
+            profileImageUrl: ''
+        };
+    }
+}
+
+function renderProfilePanel(profileData) {
     const userNameElement = document.getElementById('profile-user-name');
     const avatarElement = document.getElementById('profile-avatar');
+    const resolvedUserName = profileData && profileData.userName ? profileData.userName : getCurrentUserName() || 'Utente';
+    const resolvedProfileImageUrl = profileData && profileData.profileImageUrl ? profileData.profileImageUrl : getUserProfileImage();
 
     if (userNameElement) {
-        userNameElement.textContent = localStorage.getItem('userName') || 'Utente';
+        userNameElement.textContent = resolvedUserName;
     }
 
     if (avatarElement) {
-        const profileImageUrl = getUserProfileImage();
-        avatarElement.src = profileImageUrl || 'img/profilo.jpg';
+        const nextImageUrl = resolvedProfileImageUrl || 'img/profilo.jpg';
+        const replacementAvatar = avatarElement.cloneNode(false);
+
+        replacementAvatar.removeAttribute('src');
+        replacementAvatar.onerror = function() {
+            this.onerror = null;
+            this.src = 'img/profilo.jpg';
+        };
+        replacementAvatar.src = nextImageUrl;
+
+        avatarElement.replaceWith(replacementAvatar);
     }
 }
 
@@ -1246,7 +1314,7 @@ async function confirmProfileCropUpload() {
     }
 }
 
-function showProfilePanel() {
+async function showProfilePanel() {
     const profileScreen = document.getElementById('profile-screen');
 
     if (!profileScreen) {
@@ -1258,7 +1326,9 @@ function showProfilePanel() {
     profileScreen.style.display = 'block';
     toggleTabBar(true);
     updateTabSelection('profile');
-    renderProfilePanel();
+
+    const profileData = await resolveProfilePanelData();
+    renderProfilePanel(profileData);
 }
 
 function handleLoginSubmit() {
@@ -1494,7 +1564,6 @@ async function showGridPanel(forceReload = false) {
         }
 
         gridFeedState.media = mediaItems;
-        gridFeedState.profileImageUrl = buildGridFeedProfileImageIndex(mediaItems);
         feedContainer.innerHTML = '';
 
         appendNextGridPage(feedContainer);
@@ -1621,7 +1690,6 @@ async function showFeedPanel(forceReload = false) {
         }
 
         gridFeedState.media = mediaItems;
-        gridFeedState.profileImageUrl = buildGridFeedProfileImageIndex(mediaItems);
         gridFeedState.renderedCount = 0;
         renderFeedPanelFromMedia(feedContainer);
         saveAppStatesToSession();
@@ -1649,7 +1717,6 @@ function resetGridPaginationState() {
     }
 
     gridFeedState.media = [];
-    gridFeedState.profileImageUrl = {};
     gridFeedState.renderedCount = 0;
     gridFeedState.observer = null;
     gridFeedState.sentinel = null;
@@ -2433,35 +2500,7 @@ function getMediaUploaderName(mediaItem) {
     return mediaItem.user || mediaItem.username || mediaItem.uploader || mediaItem.owner || 'Utente';
 }
 
-function buildGridFeedProfileImageIndex(mediaItems) {
-    const profileImageIndex = {};
-
-    if (!Array.isArray(mediaItems)) {
-        return profileImageIndex;
-    }
-
-    mediaItems.forEach(function(mediaItem) {
-        const mediaCode = getMediaCode(mediaItem);
-        const profileImageUrl = mediaItem && typeof mediaItem.profileImageUrl === 'string' ? mediaItem.profileImageUrl.trim() : '';
-
-        if (mediaCode && profileImageUrl) {
-            profileImageIndex[String(mediaCode)] = profileImageUrl;
-        }
-    });
-
-    return profileImageIndex;
-}
-
 function getMediaUploaderProfileImageUrl(mediaItem) {
-    const mediaCode = getMediaCode(mediaItem);
-
-    if (mediaCode && gridFeedState.profileImageUrl && typeof gridFeedState.profileImageUrl === 'object') {
-        const cachedProfileImageUrl = gridFeedState.profileImageUrl[String(mediaCode)];
-        if (typeof cachedProfileImageUrl === 'string' && cachedProfileImageUrl.trim()) {
-            return cachedProfileImageUrl.trim();
-        }
-    }
-
     if (!mediaItem || typeof mediaItem.profileImageUrl !== 'string') {
         return 'img/profilo.jpg';
     }
@@ -2608,13 +2647,28 @@ function getCachedCommentsByCode(mediaCode) {
     return cachedValue.slice();
 }
 
+function normalizeCommentsForCache(comments) {
+    if (!Array.isArray(comments)) {
+        return [];
+    }
+
+    return comments.map(function(comment) {
+        return {
+            user: comment && comment.user ? String(comment.user) : 'Utente',
+            text: comment && comment.text ? String(comment.text) : '',
+            createdAt: comment && comment.createdAt ? String(comment.createdAt) : '',
+            profileImageUrl: comment && typeof comment.profileImageUrl === 'string' ? comment.profileImageUrl : ''
+        };
+    });
+}
+
 function setCachedCommentsByCode(mediaCode, comments) {
     const key = normalizeCommentCacheKey(mediaCode);
     if (!key) {
         return;
     }
 
-    const normalizedComments = Array.isArray(comments) ? comments.slice() : [];
+    const normalizedComments = normalizeCommentsForCache(comments);
     commentListCache[key] = normalizedComments;
     console.debug('[comments cache] salva in cache per codice', key, 'numero commenti:', normalizedComments.length);
 }
@@ -3195,10 +3249,17 @@ async function openCommentsSheetForMedia(container, mediaItem, commentCountEleme
 
     try {
         const cachedComments = getCachedCommentsByCode(mediaCode);
-        if (Array.isArray(cachedComments)) {
+        const cachedCommentCount = Array.isArray(cachedComments) ? cachedComments.length : 0;
+        const expectedCommentCount = getCommentCountByCode(mediaCode);
+
+        if (Array.isArray(cachedComments) && cachedCommentCount === expectedCommentCount) {
             console.debug('[api] usa cache commenti per codice', mediaCode, 'numero commenti:', cachedComments.length);
             renderCommentsSheet(container, cachedComments, mediaCode, { mediaItem, commentCountElement });
             return;
+        }
+
+        if (Array.isArray(cachedComments)) {
+            console.debug('[api] cache commenti non allineata per codice', mediaCode, 'cache:', cachedCommentCount, 'expected:', expectedCommentCount);
         }
 
         console.debug('[api] richiesta backend commenti per codice', mediaCode);
@@ -3275,7 +3336,7 @@ async function showDetailScreen(mediaItem, mediaIndex) {
     detailScreen.innerHTML = `
         <div class="detail-header">
             <div class="detail-user">
-                <img src="${uploaderProfileImageUrl}" alt="Profilo utente" class="detail-user-avatar" />
+                <img src="${uploaderProfileImageUrl}" alt="Profilo utente" class="detail-user-avatar" onerror="this.onerror=null;this.src='img/profilo.jpg';" />
                 <div class="detail-user-meta">
                     <span class="detail-user-name">${uploaderName}</span>
                     <span class="detail-user-datetime">${mediaUploadedAtLabel}</span>

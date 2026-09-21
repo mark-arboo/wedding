@@ -502,4 +502,30 @@ async function cancelMedia(user, codice) {
 
 }
 
+// Restituisce i dati dell'utente specificato. 
+// L'oggetto di ritorno contiene i campi user e profileImageUrl.
+async function getUser(user) {
+
+    if (!user) {
+        throw new Error("Utente non valido.");
+    }
+
+    const response = await fetch(`${API_URL}/api/v1/login/${encodeURIComponent(user)}`, {
+        method: "GET",
+        headers: {
+            "Content-Type": "application/json",
+            "wedding-token": WEDDING_TOKEN
+        }
+    });
+
+    const result = await response.json();
+
+    if (result && result.status === "SUCCESS_STATUS" && result.data) {
+        return result.data;
+    }
+
+    throw new Error(result && result.message ? result.message : "Errore durante il recupero dell'utente.");
+}
+
+
 
