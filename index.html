@@ -73,11 +73,11 @@
             <h1 class="login-title">Matrimonio </h1>
             <p class="login-subtitle">Daniela &amp; Marco</p>
           </div>
-       <!-- 
+
           <div id="signout" onclick="showLoginPanel()">
             <i class="fa fa-arrow-left" aria-hidden="true"></i>
           </div>
-       -->
+          
           <button id="slideshow-uploadBtn" type="button" onclick="showUploadPanel()" aria-label="Aggiungi all'album" title="Aggiungi all'album">
             <i class="fa fa-plus" aria-hidden="true"></i>
           </button>
@@ -121,17 +121,21 @@
           <button type="button" class="upload-back" onclick="showGridPanel()" aria-label="Torna alla galleria">
             <i class="fa fa-arrow-left" aria-hidden="true"></i>
           </button>
-          <h2 class="upload-title">Media selezionati</h2>
+          <h2 class="upload-title">Media selezionato</h2>
           <button type="button" class="upload-add" onclick="document.getElementById('fileInput').click();">Aggiungi</button>
-          <input type="file" id="fileInput" accept="image/*,video/*" multiple style="display:none;" onchange="showSelectedFiles()" />
+          <input type="file" id="fileInput" accept="image/*,video/*" style="display:none;" onchange="showSelectedFiles()" />
         </div>
-        <p id="upload-counter" class="upload-counter">0 / 4 file selezionati</p>
-        <div id="upload-preview-grid" class="upload-preview-grid" aria-live="polite"></div>
-        <button id="upload-submitBtn" type="button" class="upload-submit" onclick="handleUploadSelectedFiles()" disabled>
-          <span class="loading-spinner upload-submit-spinner" aria-hidden="true"></span>
-          <i class="fa fa-cloud-upload upload-submit-icon" aria-hidden="true"></i>
-          <span class="upload-submit-label">Carica media</span>
-        </button>
+        <div class="upload-shell">
+          <p id="upload-counter" class="upload-counter">Nessun file selezionato</p>
+          <div id="upload-preview-grid" class="upload-preview-grid" aria-live="polite"></div>
+        </div>
+        <div class="upload-footer">
+          <button id="upload-submitBtn" type="button" class="upload-submit" onclick="handleUploadSelectedFiles()" disabled>
+            <span class="loading-spinner upload-submit-spinner" aria-hidden="true"></span>
+            <i class="fa fa-cloud-upload upload-submit-icon" aria-hidden="true"></i>
+            <span class="upload-submit-label">Carica media</span>
+          </button>
+        </div>
       </div>
 
     </div>
@@ -170,7 +174,12 @@
           <div class="profile-card__identity">
             <img id="profile-avatar" class="profile-card__avatar" src="img/profilo.jpg" alt="Immagine profilo" />
             <div class="profile-card__identity-text">
-              <span class="profile-card__label">Nome account</span>
+              <div class="profile-card__name-row">
+                <span class="profile-card__label">Nome</span>
+                <button id="profile-name-edit-button" class="profile-card__edit-button" type="button" aria-label="Modifica nome">
+                  <i class="fa fa-pencil" aria-hidden="true"></i>
+                </button>
+              </div>
               <strong id="profile-user-name" class="profile-card__name">Utente</strong>
             </div>
           </div>
@@ -212,6 +221,21 @@
     </div>
 
 
+    <div id="profile-name-modal" class="message-modal" role="dialog" aria-modal="true" aria-labelledby="profile-name-modal-title" aria-describedby="profile-name-modal-text" aria-hidden="true">
+      <div class="message-modal__content profile-name-modal__content">
+        <h2 id="profile-name-modal-title" class="message-modal__title">Nome</h2>
+
+        <label class="profile-name-editor" for="profile-name-input">
+          <input id="profile-name-input" class="profile-name-editor__input" type="text" maxlength="50" autocomplete="off" value="" />
+        </label>
+
+        <div class="profile-name-modal__actions">
+          <button id="profile-name-cancel" class="message-modal__button profile-name-modal__button profile-name-modal__button--secondary" type="button">Annulla</button>
+          <button id="profile-name-save" class="message-modal__button profile-name-modal__button" type="button">Salva</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ERROR MODAL -->
     <div id="message-modal" class="message-modal" role="dialog" aria-modal="true" aria-labelledby="message-modal-title" aria-describedby="message-modal-text" aria-hidden="true">
       <div class="message-modal__content">
@@ -235,19 +259,19 @@
 
     <div class="tabbar">
          <button id="gridViewBtn" class="tabButton active" onclick="showGridView()">
-            <i class="fa fa-th" aria-hidden="true"></i>
-            <span>Galleria</span>
+            <i class="fa fa-camera" aria-hidden="true"></i>
+            <span>Foto</span>
          </button>
         <button id="feedViewBtn" class="tabButton" onclick="showFeedView()">
-          <i class="fa fa-list" aria-hidden="true"></i>
-          <span>Feed</span>
+          <i class="fa fa-users" aria-hidden="true"></i>
+          <span>Social</span>
         </button>
          <button id="guestbookViewBtn" class="tabButton" onclick="showGuestbookView()">
             <i class="fa fa-book" aria-hidden="true"></i>
             <span>GuestBook</span>
          </button>
         <button id="profileViewBtn" class="tabButton" onclick="showProfileView()">
-          <i class="fa fa-user" aria-hidden="true"></i>
+          <i class="fa fa-user-circle-o" aria-hidden="true"></i>
           <span>Profilo</span>
         </button>
     </div>

@@ -1,4 +1,5 @@
-const API_URL = "http://localhost:8080/wedding-api";
+const API_URL = "http://localhost/wedding-api";
+// const API_URL = "/wedding-api";
 const WEDDING_TOKEN = "20c8ad3f-0876-42bf-8e56-08f73c7413ea-f7d40330-028e-4399-83f0-4dbd834d3850-2ef4d8ce-3ec6-4279-9df7-3d93aee4b6fc";
 
 // Effettua la login al sistema
@@ -14,7 +15,7 @@ async function glogin(user, token) {
           token: token
         };
       
-        const response = await fetch(`${API_URL}/api/v1/login`, {
+        const response = await fetch(`${API_URL}/api/v1/user/login`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -33,7 +34,44 @@ async function glogin(user, token) {
 
   } catch (err) {
     console.error(err);
-    throw new Error("Errore durante il login.");
+    throw err;
+  }
+}
+
+// Questa function permette la modifica del nome dell'utente in base al token.
+// I parametri sono nuovo user e vecchio token
+// Restituisce true se la modifica è avvenuta con successo, altrimenti lancia un errore.
+async function editUser(user, token) {
+  try {
+    if (!user || !token) {
+      throw new Error("Utente o token non validi.");
+    }
+
+    const payload = {
+      user: user,
+      token: token
+    };
+
+    const response = await fetch(`${API_URL}/api/v1/user/update-user`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "wedding-token": WEDDING_TOKEN
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+
+    if (result && result.status === "SUCCESS_STATUS") {
+      return true; // Modifica avvenuta con successo
+    }
+
+    throw new Error((result && result.message) || "Errore durante la modifica dell'utente.");
+
+  } catch (err) {
+    console.error("editUser error:", err);
+    throw err;
   }
 }
 
@@ -56,7 +94,7 @@ async function loadImages() {
    
   } catch (err) {
     console.error(err);
-    throw new Error("Impossibile connettersi al server.");
+    throw err;
   }
 }
 
@@ -77,7 +115,7 @@ async function getBulkLikes() {
     }
   } catch (err) {
     console.error(err);
-    throw new Error("Errore durante il recupero dei like.");
+    throw err;
   }
 }
 
@@ -117,7 +155,7 @@ async function addLike(codice, user) {
 
   } catch (err) {
     console.error(err);
-    throw new Error("Errore durante l'aggiunta del like.");
+    throw err;
   }
 }
 
@@ -143,7 +181,7 @@ async function getUserLikes(user) {
     }
   } catch (err) {
     console.error(err);
-    throw new Error("Errore durante il recupero dei like dell'utente.");
+    throw err;
   }
 }
 
@@ -188,7 +226,7 @@ async function addComment(codice, user, text) {
 
   } catch (err) {
     console.error(err);
-    throw new Error("Errore durante l'aggiunta del commento.");
+    throw err;
   }
 }
 
@@ -211,7 +249,7 @@ async function getBulkComments() {
     }
   } catch (err) {
     console.error(err);
-    throw new Error("Errore durante il recupero dei commenti.");
+    throw err;
   }
 }
 
@@ -237,7 +275,7 @@ async function getCommentsByCodice(codice) {
 
   } catch (err) {
     console.error(err);
-    throw new Error("Errore durante il recupero dei commenti.");
+    throw err;
   }
 }
 
@@ -258,7 +296,7 @@ try {
             size: file.size
           };
 
-          const response = await fetch(`${API_URL}/api/v1/login/profile-image/upload-url`, {
+          const response = await fetch(`${API_URL}/api/v1/user/profile-image/upload-url`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -296,7 +334,7 @@ try {
             codice: result.data.codice
           };
 
-          const confirmResponse = await fetch(`${API_URL}/api/v1/login/profile-image/confirm-upload`, {
+          const confirmResponse = await fetch(`${API_URL}/api/v1/user/profile-image/confirm-upload`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -316,7 +354,7 @@ try {
   
   } catch (err) {
     console.error(err);
-    throw new Error("Errore durante il caricamento dell'immagine di profilo.");
+    throw err;
   }
 }
 // Funzione per inviare foto/video sull'object storage
@@ -400,7 +438,7 @@ async function uploadMedia(files, user) {
   
   } catch (err) {
     console.error(err);
-    throw new Error("Errore durante il caricamento dei media.");
+    throw err;
   }
 }
 
@@ -510,7 +548,7 @@ async function getUser(user) {
         throw new Error("Utente non valido.");
     }
 
-    const response = await fetch(`${API_URL}/api/v1/login/${encodeURIComponent(user)}`, {
+    const response = await fetch(`${API_URL}/api/v1/user/${encodeURIComponent(user)}`, {
         method: "GET",
         headers: {
             "Content-Type": "application/json",

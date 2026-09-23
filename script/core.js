@@ -26,7 +26,7 @@ const GRID_FEED_STATE_KEY = 'gridFeedState';
 const SLIDESHOW_STATE_KEY = 'slideshowState';
 const DETAIL_STATE_KEY = 'detailScreenState';
 const DETAIL_RETURN_PANEL_KEY = 'detailReturnPanel';
-const MAX_SELECTED_FILES = 4;
+const MAX_SELECTED_FILES = 1;
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const likeCache = {};
 const commentCache = {};
@@ -779,6 +779,11 @@ function renderProfilePanel(profileData) {
         userNameElement.textContent = resolvedUserName;
     }
 
+    const profileNameInput = document.getElementById('profile-name-input');
+    if (profileNameInput) {
+        profileNameInput.value = resolvedUserName;
+    }
+
     if (avatarElement) {
         const nextImageUrl = resolvedProfileImageUrl || 'img/profilo.jpg';
         const replacementAvatar = avatarElement.cloneNode(false);
@@ -794,6 +799,77 @@ function renderProfilePanel(profileData) {
     }
 }
 
+function openProfileNameModal() {
+    const modal = document.getElementById('profile-name-modal');
+    const input = document.getElementById('profile-name-input');
+    const currentName = getCurrentUserName() || 'Utente';
+
+    if (!modal || !input) {
+        return;
+    }
+
+    input.value = currentName;
+    input.focus();
+    input.select();
+    modal.classList.add('is-visible');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeProfileNameModal() {
+    const modal = document.getElementById('profile-name-modal');
+    if (!modal) {
+        return;
+    }
+
+    modal.classList.remove('is-visible');
+    modal.setAttribute('aria-hidden', 'true');
+}
+
+async function saveProfileName() {
+    const modal = document.getElementById('profile-name-modal');
+    const input = document.getElementById('profile-name-input');
+    if (!modal || !input) {
+        return;
+    }
+
+    const nextName = (input.value || '').trim();
+    const validUserNamePattern = /^[a-zA-Z0-9 _.-]+$/;
+
+    if (!nextName) {
+        showMessage('Inserisci un nome valido.');
+        input.focus();
+        return;
+    }
+
+    if (nextName.length > 50) {
+        showMessage('Il nome può contenere al massimo 50 caratteri.');
+        input.focus();
+        return;
+    }
+
+    if (!validUserNamePattern.test(nextName)) {
+        showMessage('Il nome può contenere solo lettere, numeri, spazi, trattini e punti.');
+        input.focus();
+        return;
+    }
+
+    const userToken = localStorage.getItem('userToken');
+    if (!userToken) {
+        showMessage('Token utente non trovato. Effettua nuovamente il login.');
+        return;
+    }
+
+    try {
+        await editUser(nextName, userToken);
+        localStorage.setItem('userName', nextName);
+        renderProfilePanel({ userName: nextName, profileImageUrl: getUserProfileImage() });
+        closeProfileNameModal();        
+    } catch (error) {
+        console.error('Errore nel salvataggio del nome:', error);
+        showMessage(error && error.message ? error.message : 'Impossibile aggiornare il nome utente.');
+    }
+}
+
 function bindProfileUploadControls() {
     const uploadButton = document.getElementById('profile-upload-button');
     const fileInput = document.getElementById('profile-image-input');
@@ -802,9 +878,24 @@ function bindProfileUploadControls() {
     const cropImage = document.getElementById('profile-crop-image');
     const confirmButton = document.getElementById('profile-crop-confirm');
     const cancelButton = document.getElementById('profile-crop-cancel');
+    const editButton = document.getElementById('profile-name-edit-button');
+    const nameModalCancelButton = document.getElementById('profile-name-cancel');
+    const nameModalSaveButton = document.getElementById('profile-name-save');
 
     if (uploadButton) {
         uploadButton.onclick = openProfileImagePicker;
+    }
+
+    if (editButton) {
+        editButton.onclick = openProfileNameModal;
+    }
+
+    if (nameModalCancelButton) {
+        nameModalCancelButton.onclick = closeProfileNameModal;
+    }
+
+    if (nameModalSaveButton) {
+        nameModalSaveButton.onclick = saveProfileName;
     }
 
     if (fileInput) {
@@ -1305,8 +1396,7 @@ async function confirmProfileCropUpload() {
         saveUserProfileImage(profileImageUrl);
         renderProfilePanel();
         hideProfileCropModal();
-        showMessage('Immagine profilo aggiornata con successo.');
-    } catch (error) {
+      } catch (error) {
         console.error("Errore nel caricamento dell'immagine profilo:", error);
         showMessage(error && error.message ? error.message : "Impossibile caricare l'immagine di profilo.");
     } finally {
@@ -1493,7 +1583,7 @@ function hideMessage() {
 function generateToken(userName) {
     const timestamp = Date.now();
     const randomNum = Math.floor(Math.random() * 1000000);
-    return `${userName.toLowerCase()}-${timestamp}-${randomNum}`;
+    return `${timestamp}-${randomNum}`;
 }
 
 async function showGridPanel(forceReload = false) {
@@ -1502,6 +1592,7 @@ async function showGridPanel(forceReload = false) {
     document.getElementById('grid-screen').style.display = 'block';
     updateTabSelection('grid');
     toggleTabBar(true);
+    sessionStorage.setItem('lastActivePanel', 'grid');
 
     ptrIndicator = document.getElementById('ptr-indicator');
     ptrText = document.getElementById('ptr-text');
@@ -1536,7 +1627,6 @@ async function showGridPanel(forceReload = false) {
         const data = await loadImages();
 
         if (data.length === 0) {
-          showMessage("Nessun elemento presente nella galleria.")
           feedContainer.innerHTML = "<p style='text-align:center;'></p>";
           return;
         }
@@ -1556,13 +1646,8 @@ async function showGridPanel(forceReload = false) {
             console.warn('Impossibile caricare il riepilogo bulk dei like:', error);
         }
 
-        try {
-            const bulkCommentSummary = await getBulkComments();
-            syncCommentSummaryForMedia(mediaItems, bulkCommentSummary);
-        } catch (error) {
-            console.warn('Impossibile caricare il riepilogo bulk dei commenti:', error);
-        }
-
+        // La tab Galleria deve caricare solo i like: i conteggi dei commenti
+        // vengono gestiti invece nelle schermate che li mostrano realmente.
         gridFeedState.media = mediaItems;
         feedContainer.innerHTML = '';
 
@@ -1589,7 +1674,7 @@ async function showGridPanel(forceReload = false) {
         }
     }
 
-    sessionStorage.setItem('lastActivePanel', 'grid');
+
 
 }
 
@@ -1666,7 +1751,6 @@ async function showFeedPanel(forceReload = false) {
         }
 
         if (data.length === 0) {
-            showMessage('Nessun elemento presente nella galleria.');
             feedContainer.innerHTML = "<p style='text-align:center;'></p>";
             sessionStorage.setItem('lastActivePanel', 'feed');
             updateTabSelection('feed');
@@ -2563,8 +2647,8 @@ function restoreDetailScreenFromSession() {
 }
 
 function getCurrentUserStorageKey() {
-    const userName = (localStorage.getItem('userName') || 'guest').trim().toLowerCase();
-    return `wedding-liked-media-${userName}`;
+    const token = (localStorage.getItem('userToken') || 'token-guest').trim();
+    return `wedding-liked-media-${token}`;
 }
 
 
@@ -3062,6 +3146,18 @@ function formatItalianDate(dateValue) {
         return String(dateValue);
     }
 
+    const today = new Date();
+    const isToday = parsedDate.getFullYear() === today.getFullYear()
+        && parsedDate.getMonth() === today.getMonth()
+        && parsedDate.getDate() === today.getDate();
+
+    if (isToday) {
+        return new Intl.DateTimeFormat('it-IT', {
+            hour: '2-digit',
+            minute: '2-digit'
+        }).format(parsedDate);
+    }
+
     return new Intl.DateTimeFormat('it-IT', {
         day: '2-digit',
         month: '2-digit',
@@ -3110,6 +3206,7 @@ function updateCommentCountDisplay(countElement, nextCount) {
 function renderCommentsSheet(detailScreen, comments, mediaCode, options = {}) {
     const existingBackdrop = detailScreen.querySelector('.detail-comments-backdrop');
     const existingSheet = detailScreen.querySelector('.detail-comments-sheet');
+    const shouldRestoreTabBar = sessionStorage.getItem('lastActivePanel') === 'feed';
 
     if (existingBackdrop) {
         existingBackdrop.remove();
@@ -3117,6 +3214,10 @@ function renderCommentsSheet(detailScreen, comments, mediaCode, options = {}) {
 
     if (existingSheet) {
         existingSheet.remove();
+    }
+
+    if (shouldRestoreTabBar) {
+        toggleTabBar(false);
     }
 
     const backdrop = document.createElement('div');
@@ -3161,6 +3262,11 @@ function renderCommentsSheet(detailScreen, comments, mediaCode, options = {}) {
         closeButton.addEventListener('click', () => {
             backdrop.classList.remove('is-visible');
             sheet.classList.remove('is-open');
+
+            if (sessionStorage.getItem('lastActivePanel') === 'feed' && document.querySelector('.detail-comments-sheet')) {
+                toggleTabBar(true);
+            }
+
             setTimeout(() => {
                 backdrop.remove();
                 sheet.remove();
@@ -3279,24 +3385,6 @@ async function showDetailScreen(mediaItem, mediaIndex) {
         return;
     }
 
-    const mediaCollectionForCounts = Array.isArray(gridFeedState.media) && gridFeedState.media.length > 0
-        ? gridFeedState.media
-        : [mediaItem];
-
-    try {
-        const bulkLikeSummary = await getBulkLikes();
-        syncLikeSummaryForMedia(mediaCollectionForCounts, bulkLikeSummary);
-    } catch (error) {
-        console.warn('Impossibile caricare il riepilogo bulk dei like:', error);
-    }
-
-    try {
-        const bulkCommentSummary = await getBulkComments();
-        syncCommentSummaryForMedia(mediaCollectionForCounts, bulkCommentSummary);
-    } catch (error) {
-        console.warn('Impossibile caricare il riepilogo bulk dei commenti:', error);
-    }
-
     const returnPanel = sessionStorage.getItem('lastActivePanel') || 'grid';
 
     hideAllPanels();
@@ -3313,7 +3401,6 @@ async function showDetailScreen(mediaItem, mediaIndex) {
 
     const isVideo = mediaItem.mimeType && mediaItem.mimeType.startsWith('video/');
     const sourceUrl = getMediaDetailSource(mediaItem);
-    const downloadUrl = mediaItem.originalUrl || mediaItem.src || mediaItem.previewUrl || mediaItem.thumbnailUrl || sourceUrl || '';
 
     const mediaMarkup = isVideo
         ? `<video src="${sourceUrl}" controls playsinline autoplay muted></video>`
@@ -3321,13 +3408,8 @@ async function showDetailScreen(mediaItem, mediaIndex) {
 
     const uploaderName = getMediaUploaderName(mediaItem);
     const uploaderProfileImageUrl = getMediaUploaderProfileImageUrl(mediaItem) || 'img/profilo.jpg';
-    const mediaCode = getMediaCode(mediaItem);
     const mediaUploadedAt = mediaItem.createdAt || mediaItem.uploadedAt || mediaItem.date || mediaItem.dataCaricamento || '';
     const mediaUploadedAtLabel = mediaUploadedAt ? formatItalianDate(mediaUploadedAt) : 'Data non disponibile';
-    const initialLikeCount = getLikeCountByCode(mediaCode) || Number(mediaItem.likeCount || mediaItem.likes || 0) || 0;
-    const initialCommentCount = getCommentCountByCode(mediaCode) || Number(mediaItem.commentCount || mediaItem.comments || 0) || 0;
-    const alreadyLikedByUser = isMediaLikedByCurrentUser(mediaItem);
-    const canManageMedia = canCurrentUserManageMedia();
 
     const mediaWrapper = document.createElement('div');
     mediaWrapper.className = 'detail-media-wrapper is-transitioning';
@@ -3349,136 +3431,8 @@ async function showDetailScreen(mediaItem, mediaIndex) {
     `;
     detailScreen.appendChild(mediaWrapper);
     detailScreen.insertAdjacentHTML('beforeend', `
-        <div class="detail-actions" aria-label="Azioni media">
-            <div class="detail-action-group">
-                <button type="button" class="detail-action detail-action--like" data-code="${mediaCode || ''}" data-liked="${mediaItem.isLiked || mediaItem.liked ? 'true' : 'false'}" aria-label="Mi piace" aria-pressed="${mediaItem.isLiked || mediaItem.liked ? 'true' : 'false'}">
-                    <i class="fa ${mediaItem.isLiked || mediaItem.liked ? 'fa-heart' : 'fa-heart-o'}" aria-hidden="true"></i>
-                </button>
-                <span class="detail-action-count" data-count="${initialLikeCount}">${initialLikeCount}</span>
-            </div>
-            <div class="detail-action-group">
-                <button type="button" class="detail-action detail-action--comment" aria-label="Commenti">
-                    <i class="fa fa-comment-o" aria-hidden="true"></i>
-                </button>
-                <span class="detail-action-count detail-action-count--comments" data-count="${initialCommentCount}">${initialCommentCount}</span>
-            </div>
-            ${canManageMedia ? `
-            <div class="detail-action-group">
-                <button type="button" class="detail-action detail-action--download" data-download-url="${downloadUrl}" aria-label="Scarica media">
-                    <i class="fa fa-download" aria-hidden="true"></i>
-                </button>
-            </div>
-            <div class="detail-action-group">
-                <button type="button" class="detail-action detail-action--cancel" aria-label="Cancella media">
-                    <i class="fa fa-trash-o" aria-hidden="true"></i>
-                </button>
-            </div>
-            ` : ''}
-        </div>
         <div class="detail-navigation-hint" aria-hidden="true">Scorri in alto o in basso per il prossimo media</div>
     `);
-
-    const likeButton = detailScreen.querySelector('.detail-action--like');
-    const likeCountElement = detailScreen.querySelector('.detail-action--like').nextElementSibling;
-    const commentButton = detailScreen.querySelector('.detail-action--comment');
-    const commentCountElement = detailScreen.querySelector('.detail-action-count--comments');
-    const downloadButton = detailScreen.querySelector('.detail-action--download');
-    const cancelButton = detailScreen.querySelector('.detail-action--cancel');
-
-    if (commentButton && mediaCode) {
-        commentButton.addEventListener('click', async function() {
-            await openCommentsSheetForMedia(detailScreen, mediaItem, commentCountElement);
-        });
-    }
-
-    if (likeButton && likeCountElement) {
-        const isLikedState = alreadyLikedByUser || Boolean(mediaItem.isLiked || mediaItem.liked);
-        applyLikeVisualState(likeButton, likeCountElement, isLikedState, initialLikeCount);
-
-        likeButton.addEventListener('click', async function() {
-            if (likeButton.dataset.liked === 'true' || !mediaCode) {
-                return;
-            }
-
-            const user = localStorage.getItem('userName') || 'guest';
-            likeButton.disabled = true;
-
-            try {
-                await addLike(mediaCode, user);
-                saveLikedMediaForCurrentUser(mediaCode);
-
-                const currentCount = getLikeCountByCode(mediaCode);
-                const nextCount = currentCount + 1;
-
-                mediaItem.likeCount = nextCount;
-                mediaItem.likes = nextCount;
-                mediaItem.isLiked = true;
-                mediaItem.liked = true;
-
-                likeCache[String(mediaCode)] = nextCount;
-                saveLikeCacheToStorage();
-                refreshSlideshowFromGrid();
-
-                applyLikeVisualState(likeButton, likeCountElement, true, nextCount);
-            } catch (error) {
-                console.error('Errore nell\'aggiunta del like:', error);
-                showMessage('Impossibile aggiungere il like al momento.');
-                likeButton.disabled = false;
-            }
-        });
-    }
-
-    if (downloadButton) {
-        const downloadUrlValue = (downloadButton.dataset.downloadUrl || '').trim();
-
-        if (!downloadUrlValue) {
-            downloadButton.disabled = true;
-            downloadButton.title = 'Download non disponibile';
-        } else {
-            downloadButton.addEventListener('click', function() {
-                const safeUrl = downloadUrlValue;
-                const fileName = (mediaItem.name || safeUrl.split('/').pop() || `${isVideo ? 'video' : 'image'}-${Date.now()}`);
-                const link = document.createElement('a');
-                link.href = safeUrl;
-                link.download = fileName;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-            });
-        }
-    }
-
-    if (cancelButton && mediaCode) {
-        cancelButton.addEventListener('click', async function() {
-            const currentUser = (localStorage.getItem('userName') || '').trim().toLowerCase();
-
-            if (currentUser !== 'sposo' && currentUser !== 'sposa') {
-                showMessage('Utente non valido.');
-                return;
-            }
-
-            const confirmed = await showYesNoModal('Vuoi cancellare questo media? L\'operazione non si può annullare.', 'Conferma cancellazione');
-            if (!confirmed) {
-                return;
-            }
-
-            cancelButton.disabled = true;
-
-            try {
-                await cancelMedia(currentUser, mediaCode);
-                removeMediaFromClientState(mediaItem);
-                sessionStorage.removeItem(DETAIL_STATE_KEY);
-                await showPanelByName(getDetailReturnPanel(), true);
-                showMessage('Media cancellato con successo.');
-            } catch (error) {
-                console.error('Errore nella cancellazione del media:', error);
-                showMessage(error && error.message ? error.message : 'Impossibile cancellare il media al momento.');
-                cancelButton.disabled = false;
-            }
-        });
-    }
 
     requestAnimationFrame(function() {
         mediaWrapper.classList.remove('is-transitioning');
@@ -3531,11 +3485,11 @@ function showSelectedFiles() {
 
     const fileInput = document.getElementById('fileInput');
     if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-        showMessage("Nessun file selezionato. Seleziona almeno un file prima di caricare.");
+        showMessage("Nessun file selezionato. Seleziona un file prima di caricare.");
         return;
     }
 
-    const newFiles = Array.from(fileInput.files);
+    const newFiles = Array.from(fileInput.files).slice(0, MAX_SELECTED_FILES);
     const oversizedFiles = newFiles.filter(function(file) {
         return file && file.size > MAX_FILE_SIZE_BYTES;
     });
@@ -3545,16 +3499,14 @@ function showSelectedFiles() {
     });
 
     if (oversizedFiles.length > 0) {
-        showMessage("Uno o piu file superano la dimensione massima di 10 MB.");
+        showMessage("Il file supera la dimensione massima di 10 MB.");
     }
 
-    const mergedFiles = selectedFiles.concat(validNewFiles);
-
-    if (mergedFiles.length > MAX_SELECTED_FILES) {
-        showMessage("Puoi selezionare al massimo 4 file alla volta.");
+    if (newFiles.length > MAX_SELECTED_FILES) {
+        showMessage("Puoi caricare un solo file alla volta.");
     }
 
-    selectedFiles = mergedFiles.slice(0, MAX_SELECTED_FILES);
+    selectedFiles = validNewFiles.slice(0, MAX_SELECTED_FILES);
     fileInput.value = '';
 
     if (selectedFiles.length === 0) {
@@ -3584,24 +3536,35 @@ function renderSelectedFilesGrid() {
     }
 
     uploadSubmitButton.disabled = selectedFiles.length === 0;
-    counter.textContent = `${selectedFiles.length} / ${MAX_SELECTED_FILES} file selezionati`;
 
     if (selectedFiles.length === 0) {
-        grid.innerHTML = '<div class="upload-empty">Tocca "Aggiungi" per scegliere foto o video.</div>';
+        counter.textContent = 'Nessun file selezionato';
+        grid.innerHTML = '<div class="upload-empty">Tocca "Aggiungi" per scegliere una foto o un video.</div>';
         return;
     }
 
-    const markup = selectedFiles.map(function(file, index) {
-        const previewUrl = URL.createObjectURL(file);
-        const isVideo = file.type && file.type.startsWith('video/');
-        const media = isVideo
-            ? `<video src="${previewUrl}" controls playsinline preload="metadata"></video>`
-            : `<img src="${previewUrl}" alt="Anteprima file selezionato" loading="lazy" />`;
+    const file = selectedFiles[0];
+    const previewUrl = URL.createObjectURL(file);
+    const isVideo = file.type && file.type.startsWith('video/');
+    const media = isVideo
+        ? `<video src="${previewUrl}" controls playsinline preload="metadata"></video>`
+        : `<img src="${previewUrl}" alt="Anteprima file selezionato" loading="lazy" />`;
 
-        return `<div class="upload-card">${media}<button class="upload-remove" type="button" onclick="removeSelectedFile(${index})" aria-label="Rimuovi file">X</button></div>`;
-    }).join('');
+    const fileSizeLabel = file.size >= 1048576
+        ? `${(file.size / 1048576).toFixed(1)} MB`
+        : `${Math.max(1, Math.round(file.size / 1024))} KB`;
 
-    grid.innerHTML = markup;
+    counter.textContent = `1 / 1 file pronto`;
+    grid.innerHTML = `
+        <div class="upload-card upload-card--single">
+            ${media}
+            <div class="upload-card__meta">
+                <span class="upload-card__name">${file.name}</span>
+                <span class="upload-card__size">${fileSizeLabel}</span>
+            </div>
+            <button class="upload-remove" type="button" onclick="removeSelectedFile(0)" aria-label="Rimuovi file">×</button>
+        </div>
+    `;
 }
 
 async function handleUploadSelectedFiles() {
@@ -3637,7 +3600,6 @@ async function handleUploadSelectedFiles() {
         await uploadMedia(selectedFiles, localStorage.getItem('userName'));
         selectedFiles = [];
         renderSelectedFilesGrid();
-        showMessage('Files caricati con successo.');
 
         // Reset dello stato della Grid e dello Slideshow
         resetGridPaginationState();
