@@ -1966,7 +1966,7 @@ function createGalleryItemMarkup(item, index) {
     if (item && item.mimeType && item.mimeType.startsWith('video/')) {
         return `
             <div class="gallery-item gallery-item--video" data-media-index="${index}">
-                <img src="${mediaUrl}" alt="Video matrimonio" loading="lazy" />
+                <img src="${mediaUrl}" alt="" loading="lazy" />
                 <div class="gallery-video-overlay" aria-hidden="true">
                     <span class="gallery-video-play"></span>
                 </div>
@@ -1974,7 +1974,7 @@ function createGalleryItemMarkup(item, index) {
         `;
     }
 
-    return `<div class="gallery-item" data-media-index="${index}"><img src="${mediaUrl}" alt="Foto matrimonio" loading="lazy" /></div>`;
+    return `<div class="gallery-item" data-media-index="${index}"><img src="${mediaUrl}" alt="" loading="lazy" /></div>`;
 }
 
 function bindGridItemClicks(feedContainer) {
@@ -2497,8 +2497,151 @@ function showDetailMediaByIndex(targetIndex) {
     }
 }
 
+function updateDetailScreenMetaForIndex(detailScreen, mediaIndex) {
+    if (!detailScreen || !Number.isInteger(mediaIndex)) {
+        return;
+    }
+
+    const mediaItem = Array.isArray(gridFeedState.media) ? gridFeedState.media[mediaIndex] : null;
+    if (!mediaItem) {
+        return;
+    }
+
+    const userNameElement = detailScreen.querySelector('.detail-user-name');
+    const userDateElement = detailScreen.querySelector('.detail-user-datetime');
+    const avatarElement = detailScreen.querySelector('.detail-user-avatar');
+
+    if (userNameElement) {
+        userNameElement.textContent = getMediaUploaderName(mediaItem);
+    }
+
+    if (avatarElement) {
+        const nextAvatar = getMediaUploaderProfileImageUrl(mediaItem) || 'img/profilo.jpg';
+        avatarElement.src = nextAvatar;
+    }
+
+    const mediaUploadedAt = mediaItem.createdAt || mediaItem.uploadedAt || mediaItem.date || mediaItem.dataCaricamento || '';
+    const mediaUploadedAtLabel = mediaUploadedAt ? formatItalianDate(mediaUploadedAt) : 'Data non disponibile';
+
+    if (userDateElement) {
+        userDateElement.textContent = mediaUploadedAtLabel;
+    }
+}
+
+function getDetailSlideIndexFromScroller(scroller) {
+    if (!scroller) {
+        return 0;
+    }
+
+    const slides = Array.from(scroller.querySelectorAll('.detail-media-slide'));
+    if (!slides.length) {
+        return 0;
+    }
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const scrollerCenter = scrollerRect.left + (scroller.clientWidth / 2);
+    let closestIndex = 0;
+    let closestDistance = Number.POSITIVE_INFINITY;
+
+    slides.forEach(function(slide, index) {
+        const slideRect = slide.getBoundingClientRect();
+        const slideCenter = slideRect.left + (slideRect.width / 2);
+        const distance = Math.abs(scrollerCenter - slideCenter);
+
+        if (distance < closestDistance) {
+            closestIndex = index;
+            closestDistance = distance;
+        }
+    });
+
+    return closestIndex;
+}
+
+function computeDetailCenterTargetLeft(scroller, targetSlide) {
+    if (!scroller || !targetSlide) {
+        return 0;
+    }
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const slideRect = targetSlide.getBoundingClientRect();
+    const relativeLeft = slideRect.left - scrollerRect.left;
+    const centerOffset = (scroller.clientWidth - slideRect.width) / 2;
+    return scroller.scrollLeft + relativeLeft - centerOffset;
+}
+
+function centerDetailScrollerOnActiveSlide(detailScreen, scroller) {
+    if (!detailScreen || !scroller) {
+        return;
+    }
+
+    const slides = Array.from(scroller.querySelectorAll('.detail-media-slide'));
+    if (!slides.length) {
+        return;
+    }
+
+    const activeIndex = getDetailSlideIndexFromScroller(scroller);
+    const targetSlide = slides[activeIndex];
+    if (!targetSlide) {
+        return;
+    }
+
+    const targetLeft = Math.max(0, computeDetailCenterTargetLeft(scroller, targetSlide));
+    if (Math.abs(scroller.scrollLeft - targetLeft) > 1) {
+        scroller.scrollTo({
+            left: targetLeft,
+            behavior: 'auto'
+        });
+    }
+
+    slides.forEach(function(slide, index) {
+        slide.classList.toggle('is-active', index === activeIndex);
+    });
+
+    detailScreen.dataset.mediaIndex = String(activeIndex);
+    updateDetailScreenMetaForIndex(detailScreen, activeIndex);
+    const activeMediaItem = Array.isArray(gridFeedState.media) ? gridFeedState.media[activeIndex] : null;
+    if (activeMediaItem) {
+        saveDetailScreenState(activeMediaItem, activeIndex);
+    }
+}
+
+function scrollDetailToIndex(targetIndex) {
+    const detailScreen = document.getElementById('detail-screen');
+    const scroller = detailScreen ? detailScreen.querySelector('.detail-media-scroller') : null;
+    const slides = scroller ? Array.from(scroller.querySelectorAll('.detail-media-slide')) : [];
+
+    if (!scroller || !slides.length) {
+        return;
+    }
+
+    const safeIndex = Math.min(Math.max(targetIndex, 0), slides.length - 1);
+    const targetSlide = slides[safeIndex];
+
+    if (!targetSlide) {
+        return;
+    }
+
+    const targetLeft = Math.max(0, computeDetailCenterTargetLeft(scroller, targetSlide));
+    scroller.scrollTo({
+        left: targetLeft,
+        behavior: 'smooth'
+    });
+
+    detailScreen.dataset.mediaIndex = String(safeIndex);
+    updateDetailScreenMetaForIndex(detailScreen, safeIndex);
+    const activeMediaItem = Array.isArray(gridFeedState.media) ? gridFeedState.media[safeIndex] : null;
+    if (activeMediaItem) {
+        saveDetailScreenState(activeMediaItem, safeIndex);
+    }
+}
+
 function bindDetailSwipeNavigation(detailScreen) {
     if (!detailScreen) {
+        return;
+    }
+
+    const scroller = detailScreen.querySelector('.detail-media-scroller');
+    if (!scroller) {
         return;
     }
 
@@ -2517,7 +2660,9 @@ function bindDetailSwipeNavigation(detailScreen) {
             return;
         }
 
+        detailSwipeState.startX = event.touches[0].clientX;
         detailSwipeState.startY = event.touches[0].clientY;
+        detailSwipeState.currentX = detailSwipeState.startX;
         detailSwipeState.currentY = detailSwipeState.startY;
         detailSwipeState.isDragging = true;
     };
@@ -2527,6 +2672,7 @@ function bindDetailSwipeNavigation(detailScreen) {
             return;
         }
 
+        detailSwipeState.currentX = event.touches[0].clientX;
         detailSwipeState.currentY = event.touches[0].clientY;
     };
 
@@ -2535,29 +2681,25 @@ function bindDetailSwipeNavigation(detailScreen) {
             return;
         }
 
+        const deltaX = detailSwipeState.currentX - detailSwipeState.startX;
         const deltaY = detailSwipeState.currentY - detailSwipeState.startY;
-        if (Math.abs(deltaY) > 80) {
+
+        if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY)) {
             const currentIndex = Number(detailScreen.dataset.mediaIndex || 0);
-            const lastIndex = gridFeedState.media.length - 1;
-
-            if (currentIndex === 0 && deltaY > 0) {
-                detailSwipeState.startY = 0;
-                detailSwipeState.currentY = 0;
-                detailSwipeState.isDragging = false;
-                return;
+            const nextIndex = deltaX < 0 ? currentIndex + 1 : currentIndex - 1;
+            scrollDetailToIndex(nextIndex);
+        } else {
+            const currentIndex = getDetailSlideIndexFromScroller(scroller);
+            detailScreen.dataset.mediaIndex = String(currentIndex);
+            const activeMediaItem = Array.isArray(gridFeedState.media) ? gridFeedState.media[currentIndex] : null;
+            if (activeMediaItem) {
+                saveDetailScreenState(activeMediaItem, currentIndex);
             }
-
-            if (currentIndex === lastIndex && deltaY < 0) {
-                detailSwipeState.startY = 0;
-                detailSwipeState.currentY = 0;
-                detailSwipeState.isDragging = false;
-                return;
-            }
-
-            showDetailMediaByIndex(currentIndex + (deltaY < 0 ? 1 : -1));
         }
 
+        detailSwipeState.startX = 0;
         detailSwipeState.startY = 0;
+        detailSwipeState.currentX = 0;
         detailSwipeState.currentY = 0;
         detailSwipeState.isDragging = false;
     };
@@ -2566,6 +2708,50 @@ function bindDetailSwipeNavigation(detailScreen) {
     detailScreen.addEventListener('touchmove', detailScreen._detailTouchMoveHandler, { passive: true });
     detailScreen.addEventListener('touchend', detailScreen._detailTouchEndHandler, { passive: true });
     detailScreen.addEventListener('touchcancel', detailScreen._detailTouchEndHandler, { passive: true });
+
+    const finalizeDetailScroll = function() {
+        centerDetailScrollerOnActiveSlide(detailScreen, scroller);
+    };
+
+    detailScreen._detailScrollFinalizeTimer = null;
+    scroller.addEventListener('scroll', function() {
+        if (detailSwipeState.isDragging) {
+            return;
+        }
+
+        window.clearTimeout(detailScreen._detailScrollFinalizeTimer);
+        detailScreen._detailScrollFinalizeTimer = window.setTimeout(finalizeDetailScroll, 30);
+    }, { passive: true });
+
+    detailScreen._detailTouchEndHandler = function() {
+        if (!detailSwipeState.isDragging) {
+            finalizeDetailScroll();
+            return;
+        }
+
+        const deltaX = detailSwipeState.currentX - detailSwipeState.startX;
+        const deltaY = detailSwipeState.currentY - detailSwipeState.startY;
+
+        if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY)) {
+            const currentIndex = Number(detailScreen.dataset.mediaIndex || 0);
+            const nextIndex = deltaX < 0 ? currentIndex + 1 : currentIndex - 1;
+            scrollDetailToIndex(nextIndex);
+        } else {
+            const currentIndex = getDetailSlideIndexFromScroller(scroller);
+            detailScreen.dataset.mediaIndex = String(currentIndex);
+            const activeMediaItem = Array.isArray(gridFeedState.media) ? gridFeedState.media[currentIndex] : null;
+            if (activeMediaItem) {
+                saveDetailScreenState(activeMediaItem, currentIndex);
+            }
+            finalizeDetailScroll();
+        }
+
+        detailSwipeState.startX = 0;
+        detailSwipeState.startY = 0;
+        detailSwipeState.currentX = 0;
+        detailSwipeState.currentY = 0;
+        detailSwipeState.isDragging = false;
+    };
 }
 
 function getMediaCode(mediaItem) {
@@ -3141,15 +3327,39 @@ function formatItalianDate(dateValue) {
         return '';
     }
 
-    const parsedDate = new Date(dateValue);
+    const rawValue = String(dateValue).trim();
+    if (!rawValue) {
+        return '';
+    }
+
+    let parsedDate = new Date(rawValue);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+        const normalizedValue = rawValue.replace(' ', 'T');
+        parsedDate = new Date(normalizedValue);
+    }
+
+    if (Number.isNaN(parsedDate.getTime())) {
+        const italianDateMatch = rawValue.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
+
+        if (italianDateMatch) {
+            const [, day, month, year, hours = '0', minutes = '0'] = italianDateMatch;
+            parsedDate = new Date(
+                Number(year),
+                Number(month) - 1,
+                Number(day),
+                Number(hours),
+                Number(minutes)
+            );
+        }
+    }
+
     if (Number.isNaN(parsedDate.getTime())) {
         return String(dateValue);
     }
 
     const today = new Date();
-    const isToday = parsedDate.getFullYear() === today.getFullYear()
-        && parsedDate.getMonth() === today.getMonth()
-        && parsedDate.getDate() === today.getDate();
+    const isToday = parsedDate.toDateString() === today.toDateString();
 
     if (isToday) {
         return new Intl.DateTimeFormat('it-IT', {
@@ -3386,59 +3596,82 @@ async function showDetailScreen(mediaItem, mediaIndex) {
     }
 
     const returnPanel = sessionStorage.getItem('lastActivePanel') || 'grid';
+    const mediaList = Array.isArray(gridFeedState.media) ? gridFeedState.media : [mediaItem];
+    const resolvedIndex = Number.isInteger(mediaIndex)
+        ? Math.min(Math.max(mediaIndex, 0), mediaList.length - 1)
+        : getDetailMediaIndexByItem(mediaItem);
 
     hideAllPanels();
     toggleTabBar(false);
     sessionStorage.setItem(DETAIL_RETURN_PANEL_KEY, returnPanel);
     sessionStorage.setItem('lastActivePanel', 'detail');
-    saveDetailScreenState(mediaItem, mediaIndex);
-    detailScreen.style.display = 'block';
 
-    const resolvedIndex = Number.isInteger(mediaIndex)
-        ? mediaIndex
-        : getDetailMediaIndexByItem(mediaItem);
+    detailScreen.style.display = 'block';
     detailScreen.dataset.mediaIndex = String(resolvedIndex);
 
-    const isVideo = mediaItem.mimeType && mediaItem.mimeType.startsWith('video/');
-    const sourceUrl = getMediaDetailSource(mediaItem);
+    const currentUser = getMediaUploaderName(mediaItem);
+    const currentUserAvatar = getMediaUploaderProfileImageUrl(mediaItem) || 'img/profilo.jpg';
+    const currentMediaUploadedAt = mediaItem.createdAt || mediaItem.uploadedAt || mediaItem.date || mediaItem.dataCaricamento || '';
+    const currentMediaUploadedAtLabel = currentMediaUploadedAt ? formatItalianDate(currentMediaUploadedAt) : 'Data non disponibile';
 
-    const mediaMarkup = isVideo
-        ? `<video src="${sourceUrl}" controls playsinline autoplay muted></video>`
-        : `<img src="${sourceUrl}" alt="Dettaglio media" />`;
+    const mediaSlides = mediaList.map(function(item, index) {
+        const isVideo = item && item.mimeType && item.mimeType.startsWith('video/');
+        const sourceUrl = getMediaDetailSource(item);
+        const activeClass = index === resolvedIndex ? 'is-active' : '';
+        const mediaMarkup = isVideo
+            ? `<video src="${sourceUrl}" controls playsinline autoplay muted></video>`
+            : `<img src="${sourceUrl}" alt="Dettaglio media ${index + 1}" />`;
 
-    const uploaderName = getMediaUploaderName(mediaItem);
-    const uploaderProfileImageUrl = getMediaUploaderProfileImageUrl(mediaItem) || 'img/profilo.jpg';
-    const mediaUploadedAt = mediaItem.createdAt || mediaItem.uploadedAt || mediaItem.date || mediaItem.dataCaricamento || '';
-    const mediaUploadedAtLabel = mediaUploadedAt ? formatItalianDate(mediaUploadedAt) : 'Data non disponibile';
-
-    const mediaWrapper = document.createElement('div');
-    mediaWrapper.className = 'detail-media-wrapper is-transitioning';
-    mediaWrapper.innerHTML = mediaMarkup;
+        return `
+            <div class="detail-media-slide ${activeClass}" data-slide-index="${index}">
+                ${mediaMarkup}
+            </div>
+        `;
+    }).join('');
 
     detailScreen.innerHTML = `
         <div class="detail-header">
             <div class="detail-user">
-                <img src="${uploaderProfileImageUrl}" alt="Profilo utente" class="detail-user-avatar" onerror="this.onerror=null;this.src='img/profilo.jpg';" />
+                <img src="${currentUserAvatar}" alt="Profilo utente" class="detail-user-avatar" onerror="this.onerror=null;this.src='img/profilo.jpg';" />
                 <div class="detail-user-meta">
-                    <span class="detail-user-name">${uploaderName}</span>
-                    <span class="detail-user-datetime">${mediaUploadedAtLabel}</span>
+                    <span class="detail-user-name">${currentUser}</span>
+                    <span class="detail-user-datetime">${currentMediaUploadedAtLabel}</span>
                 </div>
             </div>
             <button type="button" class="detail-close" onclick="closeDetailScreen()" aria-label="Chiudi dettaglio">
                 <i class="fa fa-times" aria-hidden="true"></i>
             </button>
         </div>
+        <div class="detail-media-scroller" aria-label="Galleria media">
+            ${mediaSlides}
+        </div>
     `;
-    detailScreen.appendChild(mediaWrapper);
+
     detailScreen.insertAdjacentHTML('beforeend', `
-        <div class="detail-navigation-hint" aria-hidden="true">Scorri in alto o in basso per il prossimo media</div>
+        <div class="detail-navigation-hint" aria-hidden="true"></div>
     `);
 
     requestAnimationFrame(function() {
-        mediaWrapper.classList.remove('is-transitioning');
+        const scroller = detailScreen.querySelector('.detail-media-scroller');
+        if (!scroller) {
+            return;
+        }
+
+        const slides = Array.from(scroller.querySelectorAll('.detail-media-slide'));
+        slides.forEach(function(slide, index) {
+            slide.classList.toggle('is-active', index === resolvedIndex);
+        });
+
+        const targetSlide = slides[resolvedIndex];
+        if (targetSlide) {
+            const targetLeft = targetSlide.offsetLeft - ((scroller.clientWidth - targetSlide.offsetWidth) / 2);
+            scroller.scrollLeft = Math.max(0, targetLeft);
+        }
     });
 
+    updateDetailScreenMetaForIndex(detailScreen, resolvedIndex);
     bindDetailSwipeNavigation(detailScreen);
+    saveDetailScreenState(mediaItem, resolvedIndex);
 }
 
 function showUploadPanel() {

@@ -367,8 +367,15 @@ Sage & Neutral
 }
 
 #slideshow-uploadBtn i {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	font-size: 1.35rem;
 	line-height: 1;
+	margin: 0;
+	transform: none;
+	position: relative;
+	top: 0;
 }
 
 #slideshow-uploadBtn:active {
@@ -387,39 +394,69 @@ Sage & Neutral
   flex-direction: column;
 }
 
-.detail-media-wrapper {
+.detail-media-scroller {
   position: relative;
-  width: 100%;
   flex: 1 1 auto;
-	min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: none;
+  scroll-padding-inline: 0;
+  -webkit-overflow-scrolling: touch;
+  padding: calc(max(72px, env(safe-area-inset-top)) + 6px) 0 28px;
+  box-sizing: border-box;
+  scrollbar-width: none;
+}
+
+.detail-media-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.detail-media-slide {
+  position: relative;
+  flex: 0 0 100%;
+  width: 100%;
+  height: calc(100vh - 180px);
+  max-height: calc(100vh - 180px);
   display: flex;
   align-items: center;
   justify-content: center;
-	background: #eef1f4;
-	margin: 0;
-	padding: calc(max(72px, env(safe-area-inset-top)) + 24px) 12px 96px;
-	box-sizing: border-box;
-  overflow: hidden;
-	max-height: none;
+  scroll-snap-align: none;
+  scroll-snap-stop: normal;
+  box-sizing: border-box;
+  opacity: 1;
+  transform: none;
+  transition: none;
 }
 
-.detail-media-wrapper img,
-.detail-media-wrapper video {
+.detail-media-slide.is-active {
+  flex-basis: 100%;
   width: 100%;
-	max-height: calc(100vh - 192px);
-  height: auto;
+  opacity: 1;
+  transform: none;
+}
+
+.detail-media-slide img,
+.detail-media-slide video {
+  width: 100%;
+  height: 100%;
+  max-height: calc(100vh - 180px);
   object-fit: contain;
   display: block;
   background: var(--background);
+  border-radius: 18px;
   opacity: 1;
-  transform: translateY(0);
-	transition: opacity 0.26s ease, transform 0.26s ease;
+  transform: none;
+  transition: none;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.12);
 }
 
-.detail-media-wrapper.is-transitioning img,
-.detail-media-wrapper.is-transitioning video {
-  opacity: 0;
-  transform: translateY(14px);
+.detail-media-slide:not(.is-active) img,
+.detail-media-slide:not(.is-active) video {
+  filter: none;
 }
 
 .detail-actions {
@@ -1834,7 +1871,6 @@ Sage & Neutral
 	justify-content: space-between;
 	align-items: flex-start;
 	gap: 12px;
-	margin-bottom: 10px;
 }
 
 .guestbook-message__user {
