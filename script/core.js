@@ -402,6 +402,11 @@ function onPageRefresh() {
     
     // Controlla se c'era un pannello salvato
     const lastPanel = sessionStorage.getItem('lastActivePanel');
+
+    // Se è un pannello che richiede l'autenticazione e l'utente non è loggato, forzalo al login
+    if (lastPanel && lastPanel !== 'login' && localStorage.getItem('userName') === null) {
+        lastPanel = 'login';
+    }
     
     if (lastPanel) {
         switch(lastPanel) {
@@ -1604,8 +1609,6 @@ async function showGridPanel(forceReload = false) {
         resetSlideshow();
     }
     
-    await ensureLikedMediaIdsForCurrentUser();
-
     if (!forceReload && tryRestoreGridPanelFromSession(feedContainer)) {
         sessionStorage.setItem('lastActivePanel', 'grid');
         updateTabSelection('grid');
@@ -1673,10 +1676,10 @@ async function showGridPanel(forceReload = false) {
             feedContainer.innerHTML = "<p style='text-align:center; color:red;'></p>";
         }
     }
-
-
-
 }
+
+
+
 
 async function showFeedPanel(forceReload = false) {
     hideAllPanels();
@@ -3707,7 +3710,7 @@ function login(username, token) {
         })
         .catch((error) => {
             console.error("Errore durante il login:", error.message);
-            showMessage("Errore durante il login: " + error.message);
+            showMessage(error.message);
             showLoginPanel();
             throw error;
         });
