@@ -1,5 +1,5 @@
-const API_URL = "http://localhost:8080/wedding-api";
-//const API_URL = "/wedding-api";
+//const API_URL = "http://localhost:8080/wedding-api";
+const API_URL = "/wedding-api";
 const WEDDING_TOKEN = "20c8ad3f-0876-42bf-8e56-08f73c7413ea-f7d40330-028e-4399-83f0-4dbd834d3850-2ef4d8ce-3ec6-4279-9df7-3d93aee4b6fc";
 
 // Effettua la login al sistema
@@ -90,8 +90,8 @@ async function loadImages() {
       return result.data;
     }
 
-    throw new Error("Errore nel caricamento della galleria.");
-   
+    throw new Error((result && result.message) || "Errore nel caricamento della galleria.");
+
   } catch (err) {
     console.error(err);
     throw err;
@@ -110,9 +110,10 @@ async function getBulkLikes() {
 
     if (result && result.status === "SUCCESS_STATUS" && Array.isArray(result.data)) {
         return result.data;
-    } else {
-        throw new Error(result.message || "Errore durante il recupero dei like.");
-    }
+    } 
+    
+    throw new Error(result.message || "Errore durante il recupero dei like.");
+    
   } catch (err) {
     console.error(err);
     throw err;
@@ -149,10 +150,10 @@ async function addLike(codice, user) {
 
     if (result && result.status === "SUCCESS_STATUS") {
       return true; // Like aggiunto con successo
-    } else {
-      throw new Error(result.message || "Errore durante l'aggiunta del like.");
-    }
-
+    } 
+      
+    throw new Error(result.message || "Errore durante l'aggiunta del like.");
+    
   } catch (err) {
     console.error(err);
     throw err;
@@ -178,9 +179,10 @@ async function getUserLikes(user) {
     if (result && result.status === "SUCCESS_STATUS" && Array.isArray(result.data)) {
       // restituire un array dei soli codici delle immagini che l'utente ha messo like
       return result.data.map(item => String(item.codice));
-    } else {
-      throw new Error(result.message || "Errore durante il recupero dei like dell'utente.");
-    }
+    } 
+    
+    throw new Error(result.message || "Errore durante il recupero dei like dell'utente.");
+    
   } catch (err) {
     console.error(err);
     throw err;
@@ -222,9 +224,9 @@ async function addComment(codice, user, text) {
 
         if (result && result.status === "SUCCESS_STATUS") {
           return true; // Commento aggiunto con successo
-        } else {
-          throw new Error(result.message || "Errore durante l'aggiunta del commento.");
-        }
+        } 
+        
+        throw new Error(result.message || "Errore durante l'aggiunta del commento.");      
 
   } catch (err) {
     console.error(err);
@@ -246,9 +248,10 @@ async function getBulkComments() {
 
     if (result && result.status === "SUCCESS_STATUS" && Array.isArray(result.data)) {
         return result.data;
-    } else {
-        throw new Error(result.message || "Errore durante il recupero dei commenti.");
-    }
+    } else 
+        
+    throw new Error(result.message || "Errore durante il recupero dei commenti.");
+    
   } catch (err) {
     console.error(err);
     throw err;
@@ -258,23 +261,23 @@ async function getBulkComments() {
 // Restituisce i commenti associati a un codice specifico
 async function getCommentsByCodice(codice) {
   try {
-    if (!codice) {
-      throw new Error("Codice non valido.");
-    }
-
-    const response = await fetch(`${API_URL}/api/v1/comment/${codice}`, {
-      headers: {
-        "wedding-token": WEDDING_TOKEN
+      if (!codice) {
+        throw new Error("Codice non valido.");
       }
-    });
-    const result = await response.json();
 
-    if (result && result.status === "SUCCESS_STATUS" && Array.isArray(result.data)) {
-      return result.data;
-    } else {
+      const response = await fetch(`${API_URL}/api/v1/comment/${codice}`, {
+        headers: {
+          "wedding-token": WEDDING_TOKEN
+        }
+      });
+      const result = await response.json();
+
+      if (result && result.status === "SUCCESS_STATUS" && Array.isArray(result.data)) {
+        return result.data;
+      } 
+
       throw new Error(result.message || "Errore durante il recupero dei commenti.");
-    }
-
+  
   } catch (err) {
     console.error(err);
     throw err;
@@ -282,7 +285,7 @@ async function getCommentsByCodice(codice) {
 }
 
 async function uploadProfileMedia(files, user) {
-try {
+    try {
   
         if (!Array.isArray(files) || files.length === 0) {
           throw new Error("Nessun file selezionato per il caricamento.");
@@ -298,7 +301,7 @@ try {
             size: file.size
           };
 
-          const response = await fetch(`${API_URL}/api/v1/user/profile-image/upload-url`, {
+          const response = await fetch(`${API_URL}/api/v1/user/profile-image/presigned-url`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -312,7 +315,7 @@ try {
           if (result && result.status === "SUCCESS_STATUS" && result.data) {
             console.log("presigned-url del file " + file.name + ": " + result.data.url);
           } else {
-            throw new Error(result.message || "Errore durante l'upload del file.");
+            throw new Error(result.message || "Errore durante il caricamento del file");
           }
 
           // 2. Caricamento file sulla presigned url
@@ -325,7 +328,7 @@ try {
           });
 
           if (!uploadResponse.ok) {
-            throw new Error("Errore durante il caricamento del file sull'object storage.");
+            throw new Error("Errore durante il caricamento del file");
           }
 
           console.log("File " + file.name + " caricato con successo sull'object storage.");
@@ -347,27 +350,30 @@ try {
 
           const confirmResult = await confirmResponse.json();
           if (!confirmResult || confirmResult.status !== "SUCCESS_STATUS") {
-            throw new Error((confirmResult && confirmResult.message) || "Errore durante la conferma dell'upload del file.");
+            throw new Error((confirmResult && confirmResult.message) || "Errore durante il caricamento del file.");
           }
 
           console.log("File " + file.name + " confermato con successo al server.");
 
           return confirmResult.data;
   
-  } catch (err) {
-    console.error(err);
-    throw err;
-  }
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
 }
 // Funzione per inviare foto/video sull'object storage
 async function uploadMedia(files, user) {
   try {
+
+        const start = performance.now();
   
         if (!Array.isArray(files) || files.length === 0) {
           throw new Error("Nessun file selezionato per il caricamento.");
         }
 
         for (const file of files) {
+           const startPresigned = performance.now(); 
 
           // 1. Richiesta pre-sign URL
           const payload = {
@@ -377,7 +383,7 @@ async function uploadMedia(files, user) {
             size: file.size
           };
 
-          const response = await fetch(`${API_URL}/api/v1/media/upload-url`, {
+          const response = await fetch(`${API_URL}/api/v1/media/presigned-url`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -391,10 +397,14 @@ async function uploadMedia(files, user) {
           if (result && result.status === "SUCCESS_STATUS" && result.data) {
             console.log("presigned-url del file " + file.name + ": " + result.data.url);
           } else {
-            throw new Error(result.message || "Errore durante l'upload del file.");
+            throw new Error(result.message || "Errore durante il caricamento del file");
           }
+          
+          const endPresigned = performance.now();
+          console.log(`Durata richiesta presigned-url: ${(endPresigned - startPresigned).toFixed(2)} ms`);
 
           // 2. Caricamento file sulla presigned url
+          const startUpload = performance.now(); 
           const uploadResponse = await fetch(result.data.url, {
             method: "PUT",
             headers: {
@@ -404,12 +414,15 @@ async function uploadMedia(files, user) {
           });
 
           if (!uploadResponse.ok) {
-            throw new Error("Errore durante il caricamento del file sull'object storage.");
+            throw new Error("Errore durante il caricamento del file");
           }
 
+          const endUpload = performance.now();
           console.log("File " + file.name + " caricato con successo sull'object storage.");
+          console.log(`Durata upload file: ${(endUpload - startUpload).toFixed(2)} ms`);
 
           // 3. Conferma file caricato al server
+          const startConfirm = performance.now();
           const confirmPayload = {
             user: user,
             codice: result.data.codice
@@ -426,8 +439,10 @@ async function uploadMedia(files, user) {
 
           const confirmResult = await confirmResponse.json();
           if (!confirmResult || confirmResult.status !== "SUCCESS_STATUS") {
-            throw new Error((confirmResult && confirmResult.message) || "Errore durante la conferma dell'upload del file.");
+            throw new Error((confirmResult && confirmResult.message) || "Errore durante il caricamento del file");
           }
+          const endConfirm = performance.now();
+          console.log(`Durata conferma: ${(endConfirm - startConfirm).toFixed(2)} ms`);
 
           console.log("File " + file.name + " confermato con successo al server.");
 
@@ -435,6 +450,10 @@ async function uploadMedia(files, user) {
 
         // 4. Aggiungi uno sleep per dare il tempo al server di generare le immagini thumbnail
         await new Promise(resolve => setTimeout(resolve, 3000));
+
+        const end = performance.now();
+
+        console.log(`Durata metodo uploadFiles: ${(end - start).toFixed(2)} ms`);
 
         return true;
   
@@ -476,9 +495,10 @@ async function sendGuestbookMessage(user, message) {
         }
 
         throw new Error(result && result.message ? result.message : "Errore durante l'invio del messaggio al guestbook.");
+
     } catch (err) {
         console.error(err);
-        throw new Error(err && err.message ? err.message : "Errore durante l'invio del messaggio al guestbook.");
+        throw err;
     }
 }
 
@@ -502,69 +522,78 @@ async function readGuestbookMessages() {
         throw new Error(result && result.message ? result.message : "Errore durante il recupero dei messaggi del guestbook.");
     } catch (err) {
         console.error(err);
-        throw new Error(err && err.message ? err.message : "Errore durante il recupero dei messaggi del guestbook.");
+        throw err;
     }
 }
 
 
 // API per la cancellazione logica di un media
 async function cancelMedia(user, codice) {
+    try {
+        if (!user) {
+            throw new Error("Utente non valido.");
+        }
 
-    if (!user) {
-        throw new Error("Utente non valido.");
+        if (!codice || !String(codice).trim()) {
+            throw new Error("Codice non valido.");
+        }
+
+        const payload = {
+            user: user,
+            codice: codice
+        };
+
+        const response = await fetch(`${API_URL}/api/v1/media/cancel`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "wedding-token": WEDDING_TOKEN
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (result && result.status === "SUCCESS_STATUS") {
+            return true;
+        }
+
+        throw new Error(result && result.message ? result.message : "Errore durante la cancellazione del media.");
+
+    } catch (err) {
+        console.error(err);
+        throw err;
     }
-
-    if (!codice || !String(codice).trim()) {
-        throw new Error("Codice non valido.");
-    }
-
-    const payload = {
-        user: user,
-        codice: codice
-    };
-
-    const response = await fetch(`${API_URL}/api/v1/media/cancel`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "wedding-token": WEDDING_TOKEN
-        },
-        body: JSON.stringify(payload)
-    });
-
-    const result = await response.json();
-
-    if (result && result.status === "SUCCESS_STATUS") {
-        return true;
-    }
-
-    throw new Error(result && result.message ? result.message : "Errore durante la cancellazione del media.");
-
 }
 
 // Restituisce i dati dell'utente specificato. 
 // L'oggetto di ritorno contiene i campi user e profileImageUrl.
 async function getUser(user) {
-
-    if (!user) {
-        throw new Error("Utente non valido.");
-    }
-
-    const response = await fetch(`${API_URL}/api/v1/user/${encodeURIComponent(user)}`, {
-        method: "GET",
-        headers: {
-            "Content-Type": "application/json",
-            "wedding-token": WEDDING_TOKEN
+    try {
+        if (!user) {
+            throw new Error("Utente non valido.");
         }
-    });
 
-    const result = await response.json();
+        const response = await fetch(`${API_URL}/api/v1/user/${encodeURIComponent(user)}`, {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                "wedding-token": WEDDING_TOKEN
+            }
+        });
 
-    if (result && result.status === "SUCCESS_STATUS" && result.data) {
-        return result.data;
+        const result = await response.json();
+
+        if (result && result.status === "SUCCESS_STATUS" && result.data) {
+            return result.data;
+        }
+
+        throw new Error(result && result.message ? result.message : "Errore durante il recupero dell'utente.");
+    
+    } catch (err) {
+        console.error(err);
+        throw err;
     }
-
-    throw new Error(result && result.message ? result.message : "Errore durante il recupero dell'utente.");
 }
 
 

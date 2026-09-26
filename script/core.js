@@ -372,6 +372,7 @@ function initializeApp() {
     }
 }
 
+
 /**
  * Logica eseguita al primo caricamento
  */
@@ -3858,3 +3859,13 @@ async function handleUploadSelectedFiles() {
     }
 }
 
+function logout() {
+    const token = localStorage.getItem('userToken');
+
+    localStorage.removeItem('userName');
+    localStorage.removeItem('userToken');
+
+    localStorage.removeItem('wedding-liked-media-' + token);   
+
+    showLoginPanel(true);
+}
